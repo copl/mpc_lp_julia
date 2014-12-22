@@ -1,4 +1,4 @@
-max_iter = 12;
+max_iter = 100;
 tol = 1e-8;
 # Generate a random problem
 srand(1)
@@ -7,13 +7,19 @@ n = 30;
 k = 100;
 m = 90;
 
-x0 = rand(k,1) - 0.5
-s0 = rand(m,1);
+
+# Problem 2
+n = 30;
+k = 100;
+m = 100;
+
+x0 = rand(k,1)
 A = rand(n, k);
-G = rand(m,k);
+G = -diagm(ones(m));
 c = rand(k,1)
-h = G*x0 + s0; #rand(m,1);
-b = A*x0; #rand(n, 1)
+h = zeros(m);
+b = A*x0;
+
 
 # Functions
 function solveLinearEquation(A,G, c, h, b, x, s, 
