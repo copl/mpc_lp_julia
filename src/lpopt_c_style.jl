@@ -1,16 +1,12 @@
 function _main() # this function is called at the bottom of the code
 	max_iter = 20;
 	tol = 1e-8;
-	# Generate a random problem
-	n = 30;
-	k = 100;
-	m = 90;
 
-
+	srand(1234)
 	# Problem 2
-	n = 30;
-	k = 100;
-	m = 100;
+	n = 5;
+	k = 10;
+	m = 10;
 
 	problem_data = linear_program_input()
 	x0 = rand(k,1)
@@ -42,18 +38,31 @@ function interior_point_algorithm(problem_data,max_iter,tol)
 	for itr =1:max_iter
 		residuals = compute_residuals(problem_data,state)
 
+		#works correctly up to here
+		#println(residuals.r1,residuals.r2,residuals.r3,residuals.r4)
+		#break
+		
 		if (Base.norm(residuals.r1) < tol && Base.norm(residuals.r2) < tol && Base.norm(residuals.r3) < tol)
 			 println("Ended");
 			 break;
 		end
 		
 		affine_direction = compute_affine_direction(problem_data,state,residuals)
-
+		
+		#works correctly up to here
+		#println(affine_direction.dx,affine_direction.dy,affine_direction.dz)
+		#break
+		
 		mu = ((state.s)'*(state.z) + (state.tau)*(state.kappa))/(problem_data.m+1)
 		mu = mu[1];
 		corrector_direction = compute_corrector_direction(problem_data,state,residuals,affine_direction,mu) 
 		
 		alpha = corrector_direction.alpha
+		
+		
+		#println(corrector_direction.dx,corrector_direction.dy,corrector_direction.dz)
+		#println(corrector_direction.alpha)
+		#break
 		
 		state.x = state.x + alpha*corrector_direction.dx;
 		state.s = state.s + alpha*corrector_direction.ds;
@@ -224,13 +233,13 @@ function compute_affine_direction(problem_data::linear_program_input,state,resid
 	dkappa_a = (-(tau)*(kappa) - dtau_a*(kappa))/(tau)
 
 	# Compute Step size α, and Centering Parameter σ
-	vv = vec([(state.s)./ds_a; z./dz_a; (state.tau)/dtau_a; (state.kappa)/dkappa_a]);
-	alpha = 1;
-	for i=1:length(vv)
-		if (vv[i] < 0)
-			alpha = minimum([alpha, -vv[i]]);
-		end
-	end
+	 vv = vec([s./ds_a; z./dz_a; tau/dtau_a; kappa/dkappa_a]);
+    alpha = 1;
+    for i=1:length(vv)
+        if (vv[i] < 0)
+            alpha = minimum([alpha, -vv[i]]);
+        end
+    end
 	
 	return(class_direction(dx_a,dy_a,dz_a,dtau_a,ds_a,dkappa_a,alpha))
 end
@@ -259,28 +268,28 @@ function compute_corrector_direction(problem_data,state,residuals,affine_directi
 	dkappa_a = affine_direction.dkappa
 	alpha = affine_direction.alpha
 	
-	mu_a = (((state.s)+alpha*ds_a)'*((state.z)+alpha*dz_a) + ((state.tau) + alpha*dtau_a)*((state.kappa) + alpha*dkappa_a))/(m+1);
+	mu_a = ((s+alpha*ds_a)'*(z+alpha*dz_a) + (tau + alpha*dtau_a)*((kappa) + alpha*dkappa_a))/(m+1);
 	sigma = ((mu_a/(mu))^3)[1]
-
-	corrector_rhs = linear_system_rhs(-(1-sigma)*residuals.r1, -(1-sigma)*residuals.r2, -(1-sigma)*residuals.r3,(1-sigma)*residuals.r4, -z.*s -ds_a.*dz_a + sigma*mu, -tau*kappa-dtau_a*dkappa_a + sigma*mu)
+	
+	corrector_rhs = linear_system_rhs(-(1-sigma)*residuals.r1, -(1-sigma)*residuals.r2, -(1-sigma)*residuals.r3, -(1-sigma)*residuals.r4, -z.*s -ds_a.*dz_a + sigma*mu,  -tau*kappa-dtau_a*dkappa_a + sigma*mu)
 	dir = solveLinearEquation(problem_data, state, corrector_rhs);
-
+	
 	dx = dir[1:k];
-	dy = dir[(k+1):(k+n)];
-	dz = dir[(k+n+1):(k+n+m)];
-	dtau = dir[(k+n+m+1)];
-	ds = ( -z.*s -ds_a.*dz_a + sigma*mu - dz.*s)./z;
-	dkappa = (-tau*kappa-dtau_a*dkappa_a + sigma*mu - dtau*kappa)/tau
+    dy = dir[(k+1):(k+n)];
+    dz = dir[(k+n+1):(k+n+m)];
+    dtau = dir[(k+n+m+1)];
+    ds = ( -z.*s -ds_a.*dz_a + sigma*mu - dz.*s)./z;
+    dkappa = (-tau*kappa-dtau_a*dkappa_a + sigma*mu - dtau*kappa)/tau
 
 	# Update
 	vv = vec([s./ds; z./dz; tau/dtau; kappa/dkappa]);
-	alpha = 1;
-	for i=1:length(vv)
-		if (vv[i] < 0)
-			alpha = minimum([alpha, -vv[i]]);
-		end
-	end
-	alpha = alpha*.99
+    alpha = 1;
+    for i=1:length(vv)
+        if (vv[i] < 0)
+            alpha = minimum([alpha, -vv[i]]);
+        end
+    end
+    alpha = alpha*.99
 	
 	return(class_direction(dx,dy,dz,dtau,ds,dkappa,alpha))
 end
