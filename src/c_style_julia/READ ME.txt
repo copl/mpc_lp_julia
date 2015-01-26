@@ -1,0 +1,9 @@
+Run main.jl to test code.
+main.jl contains a simple example problem which you can modify.
+
+
+Remaining tasks for julia code:
+- add commenting
+
+Next steps:
+- create parallel c++ code that mimics this structure
