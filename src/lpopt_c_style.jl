@@ -178,37 +178,6 @@ type class_residuals
 	end
 end
 
-#Settings for the algorithm
-type class_settings
-    
-    max_iter::Int            
-    linear_feas_tol::Real   #This is a relative tolerance w.r.t. 
-                                 #some normalizing norms
-    comp_tol::Real          #How small must s^Tz must be when we stop
-
-    #Constant length of the 
-    #maximum combined step to the boundary to use
-    bkscale::Real
-    
-    #Configuration for solver
-    linear_solver_settings 
-
-    function class_settings(max_iter::Int,linear_feas_tol::Real,comp_tol::Real,
-                            bkscale::Real)
-        this = new()
-        this.max_iter = max_iter
-        this.linear_feas_tol = linear_feas_tol
-        this.comp_tol        = comp_tol
-        this.bkscale         = bkscale
-        return this
-    end
-end
-
-#Settings for the linear solver
-type linear_solver_settings
-#Empty for now
-end
-
 function norm_squared(residual)
 	r = [residual.r1, residual.r2, residual.r3, residual.r4]
 	return r.*r
