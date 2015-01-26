@@ -1,4 +1,12 @@
-function _main() # this function is called at the bottom of the code
+function _main() # this functionis called at the bottom of the code
+
+    #Set up the parameters
+    max_iter             = 20;
+    linear_feas_tol      = 1e-8;  
+    comp_tol            = 1e-8; 
+    bkscale              = 0.95  
+    settings = class_settings(max_iter,linear_feas_tol,comp_tol,bkscale);
+
 	max_iter = 20;
 	tol = 1e-8;
 
@@ -27,52 +35,60 @@ function _main() # this function is called at the bottom of the code
 	problem_data.k = k
 	problem_data.n = n
 
-	interior_point_algorithm(problem_data,max_iter,tol)
+
+	interior_point_algorithm(problem_data,settings)
 end
 
-function interior_point_algorithm(problem_data,max_iter,tol)
+function interior_point_algorithm(problem_data,settings)
 	println("Iter \t gap     \t mu   \t alpha     \t tau       \t feasibility")
 
 	state = linear_program_state(problem_data) # intialize state of linear program solver with default values
-	
-	for itr =1:max_iter
+    
+    #initial value of mu
+    mu = ((state.s)'*(state.z) + (state.tau)*(state.kappa))/(problem_data.m+1)
+    mu = mu[1];
+    
+    #main iteration
+	for itr =1:settings.max_iter
 		residuals = compute_residuals(problem_data,state)
+        
 
-		#works correctly up to here
-		#println(residuals.r1,residuals.r2,residuals.r3,residuals.r4)
-		#break
-		
-		if (Base.norm(residuals.r1) < tol && Base.norm(residuals.r2) < tol && Base.norm(residuals.r3) < tol)
+        #Evaluate termination criteria	
+        #TODO: This part will have to be a more sofisticated test to detect 
+        #unbounded and infeasible problems.
+		if (Base.norm(residuals.r1) < settings.linear_feas_tol && 
+            Base.norm(residuals.r2) < settings.linear_feas_tol &&
+            Base.norm(residuals.r3) < settings.linear_feas_tol && 
+            mu < settings.comp_tol)
 			 println("Ended");
 			 break;
 		end
 		
 		affine_direction = compute_affine_direction(problem_data,state,residuals)
 		
-		#works correctly up to here
-		#println(affine_direction.dx,affine_direction.dy,affine_direction.dz)
-		#break
-		
-		mu = ((state.s)'*(state.z) + (state.tau)*(state.kappa))/(problem_data.m+1)
-		mu = mu[1];
-		corrector_direction = compute_corrector_direction(problem_data,state,residuals,affine_direction,mu) 
+	    corrector_direction = compute_corrector_direction(problem_data,
+                                                          state,
+                                                          residuals,
+                                                          affine_direction,
+                                                          settings,
+                                                          mu) 
 		
 		alpha = corrector_direction.alpha
-		
-		
-		#println(corrector_direction.dx,corrector_direction.dy,corrector_direction.dz)
-		#println(corrector_direction.alpha)
-		#break
-		
+        
+
+		#Take the step
 		state.x = state.x + alpha*corrector_direction.dx;
 		state.s = state.s + alpha*corrector_direction.ds;
 		state.y = state.y + alpha*corrector_direction.dy;
 		state.z = state.z + alpha*corrector_direction.dz;
 		state.tau = state.tau + alpha*corrector_direction.dtau;
 		state.kappa = state.kappa + alpha*corrector_direction.dkappa;
-		
+	    
+        #Compute the gap after the step
 		gap = ((problem_data.c)'*(state.x) + (problem_data.h)'*(state.z) + (problem_data.b)'*(state.y))[1];
-		
+		mu = ((state.s)'*(state.z) + (state.tau)*(state.kappa))/(problem_data.m+1)
+		mu = mu[1];
+    
 		@printf("%3i\t%3.3e\t%3.3e\t%3.3e\t%3.3e\t%3.3e\n",itr,gap,mu,alpha, state.tau, mean(abs(norm_squared(residuals))))
 	end
 end
@@ -162,6 +178,37 @@ type class_residuals
 	end
 end
 
+#Settings for the algorithm
+type class_settings
+    
+    max_iter::Int            
+    linear_feas_tol::Real   #This is a relative tolerance w.r.t. 
+                                 #some normalizing norms
+    comp_tol::Real          #How small must s^Tz must be when we stop
+
+    #Constant length of the 
+    #maximum combined step to the boundary to use
+    bkscale::Real
+    
+    #Configuration for solver
+    linear_solver_settings 
+
+    function class_settings(max_iter::Int,linear_feas_tol::Real,comp_tol::Real,
+                            bkscale::Real)
+        this = new()
+        this.max_iter = max_iter
+        this.linear_feas_tol = linear_feas_tol
+        this.comp_tol        = comp_tol
+        this.bkscale         = bkscale
+        return this
+    end
+end
+
+#Settings for the linear solver
+type linear_solver_settings
+#Empty for now
+end
+
 function norm_squared(residual)
 	r = [residual.r1, residual.r2, residual.r3, residual.r4]
 	return r.*r
@@ -206,7 +253,9 @@ type class_direction
 	end
 end
 
-function compute_affine_direction(problem_data::linear_program_input,state,residuals)
+function compute_affine_direction(problem_data::linear_program_input,
+                                  state::linear_program_state,
+                                  residuals::class_residuals)
 	affine_rhs = linear_system_rhs(-residuals.r1, -residuals.r2, -residuals.r3, -residuals.r4, -(state.z).*(state.s), -(state.tau)*(state.kappa))
 	dir = solveLinearEquation(problem_data, state, affine_rhs)
 	A = problem_data.A
@@ -245,7 +294,12 @@ function compute_affine_direction(problem_data::linear_program_input,state,resid
 end
 
 
-function compute_corrector_direction(problem_data,state,residuals,affine_direction,mu)
+function compute_corrector_direction(problem_data::linear_program_input,
+                                     state::linear_program_state,
+                                     residuals::class_residuals,
+                                     affine_direction::class_direction,
+                                     settings::class_settings,
+                                     mu::Real)
 	A = problem_data.A
 	G = problem_data.G
 	h = problem_data.h
@@ -289,7 +343,7 @@ function compute_corrector_direction(problem_data,state,residuals,affine_directi
             alpha = minimum([alpha, -vv[i]]);
         end
     end
-    alpha = alpha*.99
+    alpha = alpha*settings.bkscale
 	
 	return(class_direction(dx,dy,dz,dtau,ds,dkappa,alpha))
 end
