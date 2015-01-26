@@ -2,65 +2,57 @@ include("interior_point_data_structures.jl")
 include("linear_system_solver.jl")
 
 
-function interior_point_algorithm(problem_data::linear_program_input,	max_iter::Int,	tol::Float64)
+function interior_point_algorithm(problem_data::class_linear_program_input,	settings::class_settings)
 
 	println("Iter \t gap     \t mu   \t alpha     \t tau       \t feasibility")
 
-	state = linear_program_state(problem_data) # intialize state of linear program solver with default values
+	state = class_linear_program_state(problem_data) # intialize state of linear program solver with default values
 	
-	for itr =1:max_iter
-		residuals = compute_residuals(problem_data,state)
-
-		#works correctly up to here
-		#println(residuals.r1,residuals.r2,residuals.r3,residuals.r4)
-		#break
+	#initial value of mu
+    mu = ((state.s)'*(state.z) + (state.tau)*(state.kappa))/(problem_data.m+1)
+    mu = mu[1];
+	
+	for itr =1:settings.max_iter
+		residuals = compute_residuals(problem_data,state);
 		
-		if (Base.norm(residuals.r1) < tol && Base.norm(residuals.r2) < tol && Base.norm(residuals.r3) < tol)
+		#Evaluate termination criteria	
+        #TODO: This part will have to be a more sofisticated test to detect 
+        #unbounded and infeasible problems.
+		if (Base.norm(residuals.r1) < settings.linear_feas_tol && 
+            Base.norm(residuals.r2) < settings.linear_feas_tol &&
+            Base.norm(residuals.r3) < settings.linear_feas_tol && 
+            mu < settings.comp_tol)
 			 println("Ended");
 			 break;
 		end
 		
-		affine_direction = compute_affine_direction(problem_data,state,residuals)
+			affine_direction = compute_affine_direction(problem_data,state,residuals);
 		
-		#works correctly up to here
-		#println(affine_direction.dx,affine_direction.dy,affine_direction.dz)
-		#break
+	    corrector_direction = compute_corrector_direction(problem_data,
+                                                          state,
+                                                          residuals,
+                                                          affine_direction,
+                                                          settings,
+                                                          mu);
 		
-		mu = ((state.s)'*(state.z) + (state.tau)*(state.kappa))/(problem_data.m+1)
-		mu = mu[1];
-		corrector_direction = compute_corrector_direction(problem_data,state,residuals,affine_direction,mu) 
-		
-		alpha = corrector_direction.alpha
-		
-		
-		#println(corrector_direction.dx,corrector_direction.dy,corrector_direction.dz)
-		#println(corrector_direction.alpha)
-		#break
-		
+		alpha = corrector_direction.alpha; # get the step size
+        
+		#Take the step
 		state.x = state.x + alpha*corrector_direction.dx;
 		state.s = state.s + alpha*corrector_direction.ds;
 		state.y = state.y + alpha*corrector_direction.dy;
 		state.z = state.z + alpha*corrector_direction.dz;
 		state.tau = state.tau + alpha*corrector_direction.dtau;
 		state.kappa = state.kappa + alpha*corrector_direction.dkappa;
+	    
 		
+		#Compute the gap after the step
 		gap = ((problem_data.c)'*(state.x) + (problem_data.h)'*(state.z) + (problem_data.b)'*(state.y))[1];
+		mu = ((state.s)'*(state.z) + (state.tau)*(state.kappa))/(problem_data.m+1);
+		mu = mu[1];
 		
 		@printf("%3i\t%3.3e\t%3.3e\t%3.3e\t%3.3e\t%3.3e\n",itr,gap,mu,alpha, state.tau, mean(abs(norm_squared(residuals))))
 	end
-end
-
-# Initialization
-function intialize(problem_data::linear_program_input)
-
-	x = zeros(k, 1);
-	s = ones(m, 1);
-	z = ones(m, 1);
-	y = zeros(n, 1);
-	tau = 1;
-	kappa = 1;
-
-  return(state)
 end
 
 function norm_squared(residual::class_residuals)
@@ -68,7 +60,7 @@ function norm_squared(residual::class_residuals)
 	return r.*r
 end
 
-function compute_residuals(pd::linear_program_input, state::linear_program_state)
+function compute_residuals(pd::class_linear_program_input, state::class_linear_program_state)
 
 	r = [zeros(1,pd.k) zeros(1,pd.n) (state.s)'  state.kappa]' -
 			[ zeros(pd.k,pd.k)  pd.A'          pd.G'           pd.c;
@@ -85,9 +77,9 @@ function compute_residuals(pd::linear_program_input, state::linear_program_state
 	return(class_residuals(r1,r2,r3,r4))
 end
 
-function compute_affine_direction(problem_data::linear_program_input,	state::linear_program_state,	residuals::class_residuals)
+function compute_affine_direction(problem_data::class_linear_program_input,	state::class_linear_program_state,	residuals::class_residuals)
 
-	affine_rhs = linear_system_rhs(-residuals.r1, -residuals.r2, -residuals.r3, -residuals.r4, -(state.z).*(state.s), -(state.tau)*(state.kappa))
+	affine_rhs = class_linear_system_rhs(-residuals.r1, -residuals.r2, -residuals.r3, -residuals.r4, -(state.z).*(state.s), -(state.tau)*(state.kappa))
 	dir = solveLinearEquation(problem_data, state, affine_rhs)
 	A = problem_data.A
 	G = problem_data.G
@@ -125,8 +117,12 @@ function compute_affine_direction(problem_data::linear_program_input,	state::lin
 end
 
 
-function compute_corrector_direction(problem_data::linear_program_input,	state::linear_program_state,	residuals::class_residuals,affine_direction::class_direction, mu::Float64)
-
+function compute_corrector_direction(problem_data::class_linear_program_input,
+                                     state::class_linear_program_state,
+                                     residuals::class_residuals,
+                                     affine_direction::class_direction,
+                                     settings::class_settings,
+                                     mu::Real)
 	A = problem_data.A
 	G = problem_data.G
 	h = problem_data.h
@@ -152,7 +148,7 @@ function compute_corrector_direction(problem_data::linear_program_input,	state::
 	mu_a = ((s+alpha*ds_a)'*(z+alpha*dz_a) + (tau + alpha*dtau_a)*((kappa) + alpha*dkappa_a))/(m+1);
 	sigma = ((mu_a/(mu))^3)[1]
 	
-	corrector_rhs = linear_system_rhs(-(1-sigma)*residuals.r1, -(1-sigma)*residuals.r2, -(1-sigma)*residuals.r3, -(1-sigma)*residuals.r4, -z.*s -ds_a.*dz_a + sigma*mu,  -tau*kappa-dtau_a*dkappa_a + sigma*mu)
+	corrector_rhs = class_linear_system_rhs(-(1-sigma)*residuals.r1, -(1-sigma)*residuals.r2, -(1-sigma)*residuals.r3, -(1-sigma)*residuals.r4, -z.*s -ds_a.*dz_a + sigma*mu,  -tau*kappa-dtau_a*dkappa_a + sigma*mu)
 	dir = solveLinearEquation(problem_data, state, corrector_rhs);
 	
 	dx = dir[1:k];
@@ -170,7 +166,7 @@ function compute_corrector_direction(problem_data::linear_program_input,	state::
             alpha = minimum([alpha, -vv[i]]);
         end
     end
-    alpha = alpha*.99
+    alpha = alpha*settings.bkscale
 	
 	return(class_direction(dx,dy,dz,dtau,ds,dkappa,alpha))
 end
