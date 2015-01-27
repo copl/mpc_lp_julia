@@ -9,15 +9,26 @@ function interior_point_algorithm(problem_data::class_linear_program_input,	sett
 	state = class_linear_program_state(problem_data) # intialize state of linear program solver with default values
 	
 	#initial value of mu
-    mu = ((state.s)'*(state.z) + (state.tau)*(state.kappa))/(problem_data.m+1)
+    #move mu to state
+	mu = ((state.s)'*(state.z) + (state.tau)*(state.kappa))/(problem_data.m+1)
     mu = mu[1];
 	
+	K_newton_matrix = assemble_K_newton_matrix(problem_data)
+	rhs = class_linear_system_rhs(problem_data);
+	direction = class_direction(problem_data);
+	residuals = compute_residuals(problem_data,state);
+	
 	for itr =1:settings.max_iter
-		residuals = compute_residuals(problem_data,state);
+		# Update_K_newton_matrix(K,state)
+		
+		residuals = compute_residuals(residuals,problem_data,state);
 		
 		#Evaluate termination criteria	
         #TODO: This part will have to be a more sofisticated test to detect 
         #unbounded and infeasible problems.
+		
+		# update_state_information(state)  # calculate norms etc
+		# check_termination_criterion(settings,state,mu)
 		if (Base.norm(residuals.r1) < settings.linear_feas_tol && 
             Base.norm(residuals.r2) < settings.linear_feas_tol &&
             Base.norm(residuals.r3) < settings.linear_feas_tol && 
@@ -26,18 +37,22 @@ function interior_point_algorithm(problem_data::class_linear_program_input,	sett
 			 break;
 		end
 		
-			affine_direction = compute_affine_direction(problem_data,state,residuals);
+		rhs = compute_affine_rhs()
+		direction = compute_affine_direction(direction,problem_data,state,residuals,K_newton_matrix);
 		
-	    corrector_direction = compute_corrector_direction(problem_data,
+		rhs = compute_corrector_rhs(rhs,residuals,state)
+	    direction = compute_corrector_direction(direction,problem_data,
                                                           state,
-                                                          residuals,
-                                                          affine_direction,
-                                                          settings,
+														  rhs,
+                                                          K_newton_matrix,
+														  settings,
                                                           mu);
 		
 		alpha = corrector_direction.alpha; # get the step size
         
+		#BLAS
 		#Take the step
+		#take_step(state)
 		state.x = state.x + alpha*corrector_direction.dx;
 		state.s = state.s + alpha*corrector_direction.ds;
 		state.y = state.y + alpha*corrector_direction.dy;
@@ -78,7 +93,7 @@ function compute_residuals(pd::class_linear_program_input, state::class_linear_p
 end
 
 function compute_affine_direction(problem_data::class_linear_program_input,	state::class_linear_program_state,	residuals::class_residuals)
-
+	
 	affine_rhs = class_linear_system_rhs(-residuals.r1, -residuals.r2, -residuals.r3, -residuals.r4, -(state.z).*(state.s), -(state.tau)*(state.kappa))
 	dir = solveLinearEquation(problem_data, state, affine_rhs)
 	A = problem_data.A
@@ -147,7 +162,6 @@ function compute_corrector_direction(problem_data::class_linear_program_input,
 	
 	mu_a = ((s+alpha*ds_a)'*(z+alpha*dz_a) + (tau + alpha*dtau_a)*((kappa) + alpha*dkappa_a))/(m+1);
 	sigma = ((mu_a/(mu))^3)[1]
-	
 	corrector_rhs = class_linear_system_rhs(-(1-sigma)*residuals.r1, -(1-sigma)*residuals.r2, -(1-sigma)*residuals.r3, -(1-sigma)*residuals.r4, -z.*s -ds_a.*dz_a + sigma*mu,  -tau*kappa-dtau_a*dkappa_a + sigma*mu)
 	dir = solveLinearEquation(problem_data, state, corrector_rhs);
 	
