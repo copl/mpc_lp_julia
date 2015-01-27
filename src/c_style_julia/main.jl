@@ -38,6 +38,7 @@ function construct_instance1()
 	
 	return problem_data
 end
+
 ######################
 #  run the program   #
 ######################

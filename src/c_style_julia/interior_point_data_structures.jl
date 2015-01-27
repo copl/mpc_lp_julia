@@ -50,7 +50,9 @@ type class_linear_program_input
 end
 
 type class_linear_program_result
-	# empty for now
+	###########
+	# TO DO
+	###########
 	result # integer codes: optimal_solution_found, unbounded, infeasible
 	x
 end
