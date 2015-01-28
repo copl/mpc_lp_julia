@@ -38,14 +38,17 @@ type class_linear_program_input
 	m
 	n
 	k
-	# get_m
-	# get_n
-	# get_k
-
+	
 	function class_linear_program_input()
-		this = new ();
+		this = new();
+		return(this);
+	end
+end
 
-		return this
+type class_K_newton_matrix
+	function class_K_newton_matrix(problem_data::class_linear_program_input)
+		this = new();
+		return(this);
 	end
 end
 
@@ -57,7 +60,28 @@ type class_linear_program_result
 	x
 end
 
-type class_linear_program_state
+type class_algorithm_state
+	# TO DO
+	mu
+	sigma
+	gap
+	
+	function class_algorithm_state()
+		this.new()
+		
+		this.update_mu = function(variables::class_linear_program_variables)
+			variables.mu = ( ((variables.s)'*(variables.z) + (variables.tau)*(variables.kappa))/(problem_data.m+1)[1] )
+		end
+		
+		this.update_gap = function(variables::class_linear_program_variables,problem_data::class_linear_program_input)
+			this.gap = (problem_data.c)'*(variables.x) + (problem_data.h)'*(variables.z) + (problem_data.b)'*(variables.y))[1];
+		end
+		
+		return(this)
+	end
+end
+
+type class_linear_program_variables 
 	x
 	s
 	z
@@ -65,16 +89,28 @@ type class_linear_program_state
 	tau
 	kappa
 
-	function class_linear_program_state(problem_data)
-	  this = new();
-	  this.x = zeros(problem_data.k, 1);
-	  this.s = ones(problem_data.m, 1);
-	  this.z = ones(problem_data.m, 1);
-	  this.y = zeros(problem_data.n, 1);
-	  this.tau = 1;
-	  this.kappa = 1;
-
-	  return this
+	function class_linear_program_variables(problem_data::class_linear_program_input)
+		this = new();
+		
+		this.x = zeros(problem_data.k, 1);
+		this.s = ones(problem_data.m, 1);
+		this.z = ones(problem_data.m, 1);
+		this.y = zeros(problem_data.n, 1);
+		this.tau = 1;
+		this.kappa = 1;
+		
+		this.function = take_step(direction::class_direction)
+			alpha = direction.alpha; # get the step size
+			
+			this.x = this.x + alpha*direction.dx;
+			this.s = this.s + alpha*direction.ds;
+			this.y = this.y + alpha*direction.dy;
+			this.z = this.z + alpha*direction.dz;
+			this.tau = this.tau + alpha*direction.dtau;
+			this.kappa = this.kappa + alpha*direction.dkappa;
+		end
+		
+		return this
 	end
 end
 
@@ -86,14 +122,36 @@ type class_linear_system_rhs
 	q5
 	q6
 	
-	function class_linear_system_rhs(q1,q2,q3,q4,q5,q6)
-		this = new()
-		this.q1 = q1
-		this.q2 = q2
-		this.q3 = q3
-		this.q4 = q4
-		this.q5 = q5
-		this.q6 = q6
+	function class_linear_system_rhs()
+		this = new();
+		
+		this.update_values = function (q1,q2,q3,q4,q5,q6)
+			this.q1 = q1
+			this.q2 = q2
+			this.q3 = q3
+			this.q4 = q4
+			this.q5 = q5
+			this.q6 = q6
+		end
+		
+		this.compute_affine_rhs = function(residuals::class_residuals,	variables::class_linear_program_variables)
+			this.update_values(-residuals.r1, -residuals.r2, -residuals.r3, -residuals.r4, -(variables.z).*(variables.s), -(variables.tau)*(variables.kappa))
+		end
+		
+		this.compute_corrector_rhs = function(residuals::class_residuals,affine_direction::direction,variables)
+			dx_a = affine_direction.dx
+			dy_a = affine_direction.dy
+			ds_a = affine_direction.ds
+			dz_a = affine_direction.dz
+			dtau_a = affine_direction.dtau
+			dkappa_a = affine_direction.dkappa
+			alpha = affine_direction.alpha
+			
+			mu_a = ((s+alpha*ds_a)'*(z+alpha*dz_a) + (tau + alpha*dtau_a)*((kappa) + alpha*dkappa_a))/(m+1);
+			sigma = ((mu_a/(mu))^3)[1]
+			
+			this.update_values(-(1-sigma)*residuals.r1, -(1-sigma)*residuals.r2, -(1-sigma)*residuals.r3, -(1-sigma)*residuals.r4, -z.*s -ds_a.*dz_a + sigma*mu,  -tau*kappa-dtau_a*dkappa_a + sigma*mu)
+		end
 		
 		return this
 	end
@@ -104,12 +162,40 @@ type class_residuals
 	r2
 	r3
 	r4
-	function class_residuals(r1,r2,r3,r4)
-		this = new()
-		this.r1 = r1
-		this.r2 = r2
-		this.r3 = r3
-		this.r4 = r4
+	
+	r1_norm
+	r2_norm
+	r3_norm
+	
+	function class_residuals()
+		this = new();
+		
+		this.update_values = function(r1,r2,r3,r4)
+			this.r1 = r1
+			this.r2 = r2
+			this.r3 = r3
+			this.r4 = r4
+			
+			r1_norm = Base.norm(residuals.r1)
+			r2_norm = Base.norm(residuals.r2)
+			r3_norm = Base.norm(residuals.r3)
+		end
+		
+		this.function compute_residuals(pd::class_linear_program_input, variables::class_linear_program_variables)
+			r = [zeros(1,pd.k) zeros(1,pd.n) (variables.s)'  variables.kappa]' -
+					[ zeros(pd.k,pd.k)  pd.A'          pd.G'           pd.c;
+					 -pd.A           zeros(pd.n,pd.n)  zeros(pd.n,pd.m)  pd.b;
+					 -pd.G           zeros(pd.m,pd.n)  zeros(pd.m,pd.m)  pd.h;
+					 -pd.c'          -pd.b'         -pd.h'          0]*
+					 [variables.x; variables.y; variables.z; variables.tau];
+
+			r1 = r[1:pd.k];
+			r2 = r[(pd.k+1):(pd.k+pd.n)];
+			r3 = r[(pd.k+pd.n+1):(pd.k+pd.n+pd.m)];
+			r4 = r[pd.k+pd.n+pd.m+1];
+			
+			this.update_values(r1,r2,r3,r4)
+		end
 		
 		return this
 	end
@@ -124,15 +210,102 @@ type class_direction
 	dkappa
 	alpha
 	
-	function class_direction(dx,dy,dz,dtau,ds,dkappa,alpha)
+	function class_direction()
 		this = new();
-		this.dx = dx;
-		this.dy = dy;
-		this.dz = dz;
-		this.dtau = dtau;
-		this.ds = ds
-		this.dkappa = dkappa;
-		this.alpha = alpha;
+		
+		this.update_values = function(dx,dy,dz,dtau,ds,dkappa,alpha)
+			this.dx = dx;
+			this.dy = dy;
+			this.dz = dz;
+			this.dtau = dtau;
+			this.ds = ds
+			this.dkappa = dkappa;
+			this.alpha = alpha;
+		end
+		
+		this.function = function compute_affine_direction(
+													affine_rhs::class_linear_system_rhs,
+													problem_data::class_linear_program_input,	
+													variables::class_linear_program_variables,	
+													residuals::class_residuals)
+			
+			dir = solveLinearEquation(problem_data, variables, affine_rhs)
+			
+			m = problem_data.m
+			n = problem_data.n
+			k = problem_data.k
+			
+			x = variables.x
+			z = variables.z
+			s = variables.s
+			y = variables.y
+			tau = variables.tau
+			kappa = variables.kappa
+			
+			dx_a = dir[1:k];
+			dy_a = dir[(k+1):(k+n)];
+			dz_a = dir[(k+n+1):(k+n+m)];
+			dtau_a = dir[(k+n+m+1)];
+			ds_a = ( -z.*s - dz_a.*s)./z;
+			dkappa_a = (-(tau)*(kappa) - dtau_a*(kappa))/(tau)
+
+			# Compute Step size a, and Centering Parameter s
+			vv = vec([s./ds_a; z./dz_a; tau/dtau_a; kappa/dkappa_a]);
+			alpha = 1;
+			for i=1:length(vv)
+				if (vv[i] < 0)
+					alpha = minimum([alpha, -vv[i]]);
+				end
+			end
+			
+			this.update_values(dx_a,dy_a,dz_a,dtau_a,ds_a,dkappa_a,alpha)
+		end
+		
+		this.function = compute_corrector_direction(
+									 corrector_rhs::class_linear_system_rhs,
+									 problem_data::class_linear_program_input,
+                                     variables::class_linear_program_variables,
+									 state::class_algorithm_state,
+                                     residuals::class_residuals,
+                                     settings::class_settings)
+			m = problem_data.m
+			n = problem_data.n
+			k = problem_data.k
+			
+			kappa = variables.kappa
+			tau = variables.tau
+			s = variables.s
+			z = variables.z
+			
+			dx_a = affine_direction.dx
+			dy_a = affine_direction.dy
+			ds_a = affine_direction.ds
+			dz_a = affine_direction.dz
+			dtau_a = affine_direction.dtau
+			dkappa_a = affine_direction.dkappa
+			alpha = affine_direction.alpha
+			
+			dir = solveLinearEquation(problem_data, variables, corrector_rhs);
+			
+			dx = dir[1:k];
+			dy = dir[(k+1):(k+n)];
+			dz = dir[(k+n+1):(k+n+m)];
+			dtau = dir[(k+n+m+1)];
+			ds = ( -z.*s -ds_a.*dz_a + sigma*mu - dz.*s)./z;
+			dkappa = (-tau*kappa-dtau_a*dkappa_a + sigma*mu - dtau*kappa)/tau
+
+			# Update
+			vv = vec([s./ds; z./dz; tau/dtau; kappa/dkappa]);
+			alpha = 1;
+			for i=1:length(vv)
+				if (vv[i] < 0)
+					alpha = minimum([alpha, -vv[i]]);
+				end
+			end
+			alpha = alpha*settings.bkscale
+			
+			this.update_values(dx,dy,dz,dtau,ds,dkappa,alpha)
+		end
 		
 		return this
 	end
