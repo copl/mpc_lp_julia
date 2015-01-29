@@ -62,19 +62,22 @@ end
 
 type class_algorithm_state
 	# TO DO
-	mu
-	sigma
-	gap
+	mu::Real
+	sigma::Real
+	gap::Real
+	
+	update_mu::Function
+	update_gap::Function
 	
 	function class_algorithm_state()
-		this.new()
+		this = new();
 		
-		this.update_mu = function(variables::class_linear_program_variables)
-			variables.mu = ( ((variables.s)'*(variables.z) + (variables.tau)*(variables.kappa))/(problem_data.m+1)[1] )
+		this.update_mu = function(variables::class_linear_program_variables,problem_data::class_linear_program_input)
+			this.mu = ( ((variables.s)'*(variables.z) + (variables.tau)*(variables.kappa))/(problem_data.m+1))[1] 
 		end
 		
 		this.update_gap = function(variables::class_linear_program_variables,problem_data::class_linear_program_input)
-			this.gap = (problem_data.c)'*(variables.x) + (problem_data.h)'*(variables.z) + (problem_data.b)'*(variables.y))[1];
+			this.gap = ((problem_data.c)'*(variables.x) + (problem_data.h)'*(variables.z) + (problem_data.b)'*(variables.y))[1];
 		end
 		
 		return(this)
@@ -86,9 +89,11 @@ type class_linear_program_variables
 	s
 	z
 	y
-	tau
-	kappa
-
+	tau::Real
+	kappa::Real
+	
+	take_step::Function
+	
 	function class_linear_program_variables(problem_data::class_linear_program_input)
 		this = new();
 		
@@ -99,7 +104,7 @@ type class_linear_program_variables
 		this.tau = 1;
 		this.kappa = 1;
 		
-		this.function = take_step(direction::class_direction)
+		this.take_step = function(direction::class_direction)
 			alpha = direction.alpha; # get the step size
 			
 			this.x = this.x + alpha*direction.dx;
@@ -110,7 +115,7 @@ type class_linear_program_variables
 			this.kappa = this.kappa + alpha*direction.dkappa;
 		end
 		
-		return this
+		return(this)
 	end
 end
 
@@ -122,7 +127,11 @@ type class_linear_system_rhs
 	q5
 	q6
 	
-	function class_linear_system_rhs()
+	update_values::Function
+	compute_affine_rhs::Function
+	compute_corrector_rhs::Function
+	
+	function class_linear_system_rhs(problem_data::class_linear_program_input)
 		this = new();
 		
 		this.update_values = function (q1,q2,q3,q4,q5,q6)
@@ -138,7 +147,14 @@ type class_linear_system_rhs
 			this.update_values(-residuals.r1, -residuals.r2, -residuals.r3, -residuals.r4, -(variables.z).*(variables.s), -(variables.tau)*(variables.kappa))
 		end
 		
-		this.compute_corrector_rhs = function(residuals::class_residuals,affine_direction::direction,variables)
+		this.compute_corrector_rhs = function(residuals::class_residuals,variables::class_linear_program_variables,state::class_algorithm_state,affine_direction::class_direction,problem_data::class_linear_program_input)
+			m = problem_data.m
+			
+			z = variables.z
+			s = variables.s
+			tau = variables.tau
+			kappa = variables.kappa
+			
 			dx_a = affine_direction.dx
 			dy_a = affine_direction.dy
 			ds_a = affine_direction.ds
@@ -147,8 +163,12 @@ type class_linear_system_rhs
 			dkappa_a = affine_direction.dkappa
 			alpha = affine_direction.alpha
 			
+			mu = state.mu
+			
 			mu_a = ((s+alpha*ds_a)'*(z+alpha*dz_a) + (tau + alpha*dtau_a)*((kappa) + alpha*dkappa_a))/(m+1);
 			sigma = ((mu_a/(mu))^3)[1]
+			
+			state.sigma = sigma
 			
 			this.update_values(-(1-sigma)*residuals.r1, -(1-sigma)*residuals.r2, -(1-sigma)*residuals.r3, -(1-sigma)*residuals.r4, -z.*s -ds_a.*dz_a + sigma*mu,  -tau*kappa-dtau_a*dkappa_a + sigma*mu)
 		end
@@ -163,11 +183,16 @@ type class_residuals
 	r3
 	r4
 	
-	r1_norm
-	r2_norm
-	r3_norm
+	r1_norm::Real
+	r2_norm::Real
+	r3_norm::Real
+	normed_squared::Real
 	
-	function class_residuals()
+	
+	update_values::Function
+	compute_residuals::Function
+	
+	function class_residuals(problem_data::class_linear_program_input)
 		this = new();
 		
 		this.update_values = function(r1,r2,r3,r4)
@@ -176,12 +201,14 @@ type class_residuals
 			this.r3 = r3
 			this.r4 = r4
 			
-			r1_norm = Base.norm(residuals.r1)
-			r2_norm = Base.norm(residuals.r2)
-			r3_norm = Base.norm(residuals.r3)
+			this.r1_norm = Base.norm(r1)
+			this.r2_norm = Base.norm(r2)
+			this.r3_norm = Base.norm(r3)
+			
+			this.normed_squared = 0
 		end
 		
-		this.function compute_residuals(pd::class_linear_program_input, variables::class_linear_program_variables)
+		this.compute_residuals = function(pd::class_linear_program_input, variables::class_linear_program_variables)
 			r = [zeros(1,pd.k) zeros(1,pd.n) (variables.s)'  variables.kappa]' -
 					[ zeros(pd.k,pd.k)  pd.A'          pd.G'           pd.c;
 					 -pd.A           zeros(pd.n,pd.n)  zeros(pd.n,pd.m)  pd.b;
@@ -210,7 +237,11 @@ type class_direction
 	dkappa
 	alpha
 	
-	function class_direction()
+	update_values::Function
+	compute_affine_direction::Function
+	compute_corrector_direction::Function
+	
+	function class_direction(problem_data::class_linear_program_input)
 		this = new();
 		
 		this.update_values = function(dx,dy,dz,dtau,ds,dkappa,alpha)
@@ -223,13 +254,12 @@ type class_direction
 			this.alpha = alpha;
 		end
 		
-		this.function = function compute_affine_direction(
-													affine_rhs::class_linear_system_rhs,
+		this.compute_affine_direction = function(affine_rhs::class_linear_system_rhs,
 													problem_data::class_linear_program_input,	
 													variables::class_linear_program_variables,	
-													residuals::class_residuals)
+													K_newton_matrix::class_K_newton_matrix)
 			
-			dir = solveLinearEquation(problem_data, variables, affine_rhs)
+			dir = solveLinearEquation(problem_data, variables, affine_rhs, K_newton_matrix)
 			
 			m = problem_data.m
 			n = problem_data.n
@@ -261,13 +291,14 @@ type class_direction
 			this.update_values(dx_a,dy_a,dz_a,dtau_a,ds_a,dkappa_a,alpha)
 		end
 		
-		this.function = compute_corrector_direction(
+		this.compute_corrector_direction = function(
+									 affine_direction::class_direction,
 									 corrector_rhs::class_linear_system_rhs,
 									 problem_data::class_linear_program_input,
                                      variables::class_linear_program_variables,
 									 state::class_algorithm_state,
-                                     residuals::class_residuals,
-                                     settings::class_settings)
+                                     settings::class_settings,
+									 K_newton_matrix::class_K_newton_matrix)
 			m = problem_data.m
 			n = problem_data.n
 			k = problem_data.k
@@ -285,7 +316,10 @@ type class_direction
 			dkappa_a = affine_direction.dkappa
 			alpha = affine_direction.alpha
 			
-			dir = solveLinearEquation(problem_data, variables, corrector_rhs);
+			mu = state.mu
+			sigma = state.sigma
+			
+			dir = solveLinearEquation(problem_data, variables, corrector_rhs, K_newton_matrix);
 			
 			dx = dir[1:k];
 			dy = dir[(k+1):(k+n)];

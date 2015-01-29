@@ -8,12 +8,16 @@ function interior_point_algorithm(problem_data::class_linear_program_input,	sett
 
 	variables = class_linear_program_variables(problem_data) 
 	state = class_algorithm_state()
-	state.update_mu(variables)
+	state.update_mu(variables,problem_data)
 	
-	K_newton_matrix = class_K_newton_matrix(problem_data)
+	println("1")
+	
+	K_newton_matrix = class_K_newton_matrix(problem_data);
 	rhs = class_linear_system_rhs(problem_data);
 	direction = class_direction(problem_data);
 	residuals = class_residuals(problem_data);
+	
+	println("2")
 	
 	for itr =1:settings.max_iter
 		#K_newton_matrix.update(K,variables); ????????????????????
@@ -31,31 +35,31 @@ function interior_point_algorithm(problem_data::class_linear_program_input,	sett
 		direction.compute_affine_direction(rhs,problem_data,variables,K_newton_matrix); # TO DO - FIX ORDER
 		
 		# update corrector rhs using new affine direction
-		rhs.compute_corrector_rhs(residuals,direction,variables)
+		rhs.compute_corrector_rhs(residuals,variables,state,direction,problem_data)
 		# update corrector direction using new corrector rhs
-	    direction.compute_corrector_direction(problem_data,
+	    direction.compute_corrector_direction(direction,rhs,problem_data,
 											  variables,
-											  rhs,
-											  K_newton_matrix,
-											  settings);
+											  state,
+											  settings,
+											  K_newton_matrix);
 		
 		
 		# take step in the corrector direction
 		variables.take_step(direction)
 	    
 		# compute the gap after the step
-		state.update_mu(variables)
-		state.update_gap(variables)
+		state.update_mu(variables,problem_data)
+		state.update_gap(variables,problem_data)
 		
-		@printf("%3i\t%3.3e\t%3.3e\t%3.3e\t%3.3e\t%3.3e\n", itr, state.gap ,state.mu, alpha, variables.tau, residuals.normed_squared))
+		@printf("%3i\t%3.3e\t%3.3e\t%3.3e\t%3.3e\t%3.3e\n", itr, state.gap ,state.mu, direction.alpha, variables.tau, residuals.normed_squared)
 	end
 	
 	# TO DO
-	# return something!
+	# return something!!!!
 end
 
 
-function check_termination_criterion(settings::class_settings,state::class_algorithm_state,residuals::class_residuals)
+function termination_criterion_met(settings::class_settings,state::class_algorithm_state,residuals::class_residuals)
 	# TO DO
 	# store a bunch of norms
 	
@@ -68,6 +72,8 @@ function check_termination_criterion(settings::class_settings,state::class_algor
 		residuals.r3_norm < settings.linear_feas_tol && 
 		state.mu < settings.comp_tol)
 		 println("Ended");
-		 return False
+		 return true
+	else
+		return false
 	end
 end
