@@ -1,6 +1,6 @@
 # Functions
 # A,G, c, h, b, x, s, z, y, tau, kappa, q1, q2, q3, q4, q5, q6
-function solveLinearEquation(problem_data::class_linear_program_input,state::class_linear_program_state,rhs::class_linear_system_rhs)
+function solveLinearEquation(problem_data::class_linear_program_input,variables::class_linear_program_variables,rhs::class_linear_system_rhs,K_newton_matrix::class_K_newton_matrix)
 	A = problem_data.A
 	G = problem_data.G
 	h = problem_data.h
@@ -10,10 +10,10 @@ function solveLinearEquation(problem_data::class_linear_program_input,state::cla
 	n = problem_data.n
 	k = problem_data.k
 	
-	kappa = state.kappa
-	tau = state.tau
-	s = state.s
-	z = state.z
+	kappa = variables.kappa
+	tau = variables.tau
+	s = variables.s
+	z = variables.z
 	
 	q1 = rhs.q1
 	q2 = rhs.q2

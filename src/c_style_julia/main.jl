@@ -36,7 +36,7 @@ function construct_instance1()
 	problem_data.k = k
 	problem_data.n = n
 	
-	return problem_data
+	return(problem_data)
 end
 
 ######################
