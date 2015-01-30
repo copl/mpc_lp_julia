@@ -9,18 +9,14 @@ function interior_point_algorithm(problem_data::class_linear_program_input,	sett
 	variables = class_linear_program_variables(problem_data) 
 	state = class_algorithm_state()
 	state.update_mu(variables,problem_data)
-	
-	println("1")
-	
+		
 	K_newton_matrix = class_K_newton_matrix(problem_data);
 	rhs = class_linear_system_rhs(problem_data);
 	direction = class_direction(problem_data);
 	residuals = class_residuals(problem_data);
-	
-	println("2")
-	
+		
 	for itr =1:settings.max_iter
-		#K_newton_matrix.update(K,variables); ????????????????????
+		K_newton_matrix.update(variables);
 		
 		# compute the residuals
 		residuals.compute_residuals(problem_data,variables);
@@ -54,8 +50,8 @@ function interior_point_algorithm(problem_data::class_linear_program_input,	sett
 		@printf("%3i\t%3.3e\t%3.3e\t%3.3e\t%3.3e\t%3.3e\n", itr, state.gap ,state.mu, direction.alpha, variables.tau, residuals.normed_squared)
 	end
 	
-	# TO DO
-	# return something!!!!
+	# TO DO RETURN MORE INFORMATION
+	return(variables)
 end
 
 

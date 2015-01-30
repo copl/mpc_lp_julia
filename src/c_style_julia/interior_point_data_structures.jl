@@ -24,11 +24,6 @@ type class_settings
     end
 end
 
-#Settings for the linear solver
-type linear_solver_settings
-#Empty for now
-end
-
 type class_linear_program_input
 	A
 	G
@@ -46,8 +41,13 @@ type class_linear_program_input
 end
 
 type class_K_newton_matrix
+	update::Function
+	
 	function class_K_newton_matrix(problem_data::class_linear_program_input)
 		this = new();
+		this.update = function(variables)
+			
+		end
 		return(this);
 	end
 end
@@ -57,7 +57,7 @@ type class_linear_program_result
 	# TO DO
 	###########
 	result # integer codes: optimal_solution_found, unbounded, infeasible
-	x
+	variables
 end
 
 type class_algorithm_state
@@ -232,10 +232,10 @@ type class_direction
 	dx
 	dy
 	dz
-	dtau
 	ds
-	dkappa
-	alpha
+	dtau::Real
+	dkappa::Real
+	alpha::Real
 	
 	update_values::Function
 	compute_affine_direction::Function
