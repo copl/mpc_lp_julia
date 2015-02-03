@@ -25,14 +25,14 @@ type class_settings
 end
 
 type class_linear_program_input
-	A
-	G
-	c
-	h
-	b
-	m
-	n
-	k
+	A # matrix
+	G # matrix
+	c # vector
+	h # vector
+	b # vector
+	m::Int
+	n::Int
+	k::Int
 	
 	function class_linear_program_input()
 		this = new();
@@ -85,10 +85,10 @@ type class_algorithm_state
 end
 
 type class_linear_program_variables 
-	x
-	s
-	z
-	y
+	x # vector
+	s # vector
+	z # vector
+	y # vector
 	tau::Real
 	kappa::Real
 	
@@ -120,12 +120,12 @@ type class_linear_program_variables
 end
 
 type class_linear_system_rhs
-	q1
-	q2
-	q3
-	q4
-	q5
-	q6
+	q1 # vector
+	q2 # vector
+	q3 # vector
+	q4 # vector
+	q5 # vector
+	q6 # vector
 	
 	update_values::Function
 	compute_affine_rhs::Function
@@ -178,10 +178,10 @@ type class_linear_system_rhs
 end
 
 type class_residuals
-	r1
-	r2
-	r3
-	r4
+	r1 # vector
+	r2 # vector
+	r3 # vector
+	r4 # vector
 	
 	r1_norm::Real
 	r2_norm::Real
@@ -229,10 +229,10 @@ type class_residuals
 end
 
 type class_direction
-	dx
-	dy
-	dz
-	ds
+	dx # vector
+	dy # vector
+	dz # vector
+	ds # vector
 	dtau::Real
 	dkappa::Real
 	alpha::Real
