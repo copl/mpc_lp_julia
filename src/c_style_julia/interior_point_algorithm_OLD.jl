@@ -10,12 +10,17 @@ function interior_point_algorithm(problem_data::class_linear_program_input,	sett
 	state = class_algorithm_state()
 	state.update_mu(variables,problem_data)
 	
+<<<<<<< HEAD
+=======
+	# allocate memory	
+>>>>>>> origin/master
 	K_newton_matrix = class_K_newton_matrix(problem_data);
 	rhs = class_linear_system_rhs(problem_data);
 	direction = class_direction(problem_data);
 	residuals = class_residuals(problem_data);
 		
 	for itr =1:settings.max_iter
+		# santiago's solver needs this
 		K_newton_matrix.update(variables);
 		
 		# compute the residuals
@@ -47,13 +52,17 @@ function interior_point_algorithm(problem_data::class_linear_program_input,	sett
 		state.update_mu(variables,problem_data)
 		state.update_gap(variables,problem_data)
 		
-		@printf("%3i\t%3.3e\t%3.3e\t%3.3e\t%3.3e\t%3.3e\n", itr, state.gap ,state.mu, direction.alpha, variables.tau, residuals.normed_squared)
+		print_status(state, direction, variables, residuals, itr)
+		
 	end
 	
 	# TO DO RETURN MORE INFORMATION
 	return(variables)
 end
 
+function print_status(state, direction, variables, residuals, itr)
+	@printf("%3i\t%3.3e\t%3.3e\t%3.3e\t%3.3e\t%3.3e\n", itr, state.gap ,state.mu, direction.alpha, variables.tau, residuals.normed_squared)
+end
 
 function termination_criterion_met(settings::class_settings,state::class_algorithm_state,residuals::class_residuals)
 	# TO DO
