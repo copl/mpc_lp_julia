@@ -209,19 +209,22 @@ type class_residuals
 		end
 		
 		this.compute_residuals = function(pd::class_linear_program_input, variables::class_linear_program_variables)
-			r = [zeros(1,pd.k) zeros(1,pd.n) (variables.s)'  variables.kappa]' -
-					[ zeros(pd.k,pd.k)  pd.A'          pd.G'           pd.c;
-					 -pd.A           zeros(pd.n,pd.n)  zeros(pd.n,pd.m)  pd.b;
-					 -pd.G           zeros(pd.m,pd.n)  zeros(pd.m,pd.m)  pd.h;
-					 -pd.c'          -pd.b'         -pd.h'          0]*
-					 [variables.x; variables.y; variables.z; variables.tau];
+			if false:
+				r = [zeros(1,pd.k) zeros(1,pd.n) (variables.s)'  variables.kappa]' -
+						[ zeros(pd.k,pd.k)  pd.A'          pd.G'           pd.c;
+						 -pd.A           zeros(pd.n,pd.n)  zeros(pd.n,pd.m)  pd.b;
+						 -pd.G           zeros(pd.m,pd.n)  zeros(pd.m,pd.m)  pd.h;
+						 -pd.c'          -pd.b'         -pd.h'          0]*
+						 [variables.x; variables.y; variables.z; variables.tau];
 
-			r1 = r[1:pd.k];
-			r2 = r[(pd.k+1):(pd.k+pd.n)];
-			r3 = r[(pd.k+pd.n+1):(pd.k+pd.n+pd.m)];
-			r4 = r[pd.k+pd.n+pd.m+1];
+				r1 = r[1:pd.k];
+				r2 = r[(pd.k+1):(pd.k+pd.n)];
+				r3 = r[(pd.k+pd.n+1):(pd.k+pd.n+pd.m)];
+				r4 = r[pd.k+pd.n+pd.m+1];
 			
-			this.update_values(r1,r2,r3,r4)
+			this.r1 = pd.A'*variables.y + pd.G'*variables.z + pd.c*variables.tau;
+			
+			#this.update_values(r1,r2,r3,r4)
 		end
 		
 		return this

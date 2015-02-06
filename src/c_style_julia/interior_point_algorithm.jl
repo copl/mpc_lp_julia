@@ -9,7 +9,7 @@ function interior_point_algorithm(problem_data::class_linear_program_input,	sett
 	variables = class_linear_program_variables(problem_data) 
 	state = class_algorithm_state()
 	state.update_mu(variables,problem_data)
-		
+	
 	K_newton_matrix = class_K_newton_matrix(problem_data);
 	rhs = class_linear_system_rhs(problem_data);
 	direction = class_direction(problem_data);
