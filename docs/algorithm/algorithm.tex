@@ -1,0 +1,328 @@
+\documentclass{article}
+
+\usepackage{amsmath}
+
+
+
+\title{LP Solver outline}
+\author{--}
+\date{Dec 2014}
+\begin{document}
+   \maketitle
+  
+ \section{LP Formulation}
+ Primal
+ \begin{eqnarray}
+ \min && c^{T}x  \\
+ \mbox{s.t.} && Ax = b \nonumber \\
+ 		  && Gx + s = h \nonumber \\
+		  && s \geq 0\nonumber  
+ \end{eqnarray} 
+ Dual
+ \begin{eqnarray}
+ \max && -h^{T}z - b^{T}y  \\
+ \mbox{s.t.} && Ax = b \nonumber \\
+ 		  && G^{T}z + A^{T}y + c = 0 \nonumber \\
+		  && z \geq 0\nonumber  
+ \end{eqnarray} 
+
+Where
+\begin{itemize}
+\item $A$ is $n\times k$
+\item $G$ is $m\times k$
+\item $x$ is $k\times 1$
+\item $s$ is $m\times1$
+\item $z$ is $m\times1$
+\item $y$ is $n\times1$
+ \end{itemize}
+ 
+ \section{Central Path for the original formulation}
+ 
+ \begin{eqnarray}
+&& \begin{bmatrix}
+0 \\
+0 \\
+s
+\end{bmatrix}
++ 
+\begin{bmatrix}
+0&  A^{T} & G^{T}\\
+A& 0 & 0 \\
+G & 0 & 0
+\end{bmatrix}
+ \begin{bmatrix}
+x \\
+y \\
+z
+\end{bmatrix}
+=
+ \begin{bmatrix}
+-c \\
+b \\
+h
+\end{bmatrix} \\
+&&(z,s) \geq 0, \;\; z \bullet s = \mu
+ \end{eqnarray}
+
+\section{Homogenous Self-dual Embedding}
+ \begin{eqnarray}
+\max && 0 \\
+ \mbox{s.t.}&&\begin{bmatrix}
+0 \\
+0 \\
+s \\
+\kappa
+\end{bmatrix}
+= 
+\begin{bmatrix}
+0&  A^{T} & G^{T} & c\\
+-A& 0 & 0 & b\\
+-G & 0 & 0 & h \\
+-c^{T} & -b^{T} & -h^T& 0
+\end{bmatrix}
+ \begin{bmatrix}
+x \\
+y \\
+z \\
+\tau
+\end{bmatrix}
+ \\
+&& (z,s, \tau, \kappa) \geq 0
+ \end{eqnarray}
+
+For each feasible solution $z\bullet s = 0$, $\tau \kappa = 0$
+
+\section{Central Path for Homogenous Self-dual Embedding}
+ \begin{eqnarray}
+&&\begin{bmatrix}
+0 \\
+0 \\
+s \\
+\kappa
+\end{bmatrix}
+= 
+\begin{bmatrix}
+0&  A^{T} & G^{T} & c\\
+-A& 0 & 0 & b\\
+-G & 0 & 0 & h \\
+-c^{T} & -b^{T} & -h^T& 0
+\end{bmatrix}
+ \begin{bmatrix}
+x \\
+y \\
+z \\
+\tau
+\end{bmatrix}  \\
+ && z\bullet s = \mu , \;\; \tau \kappa = \mu \\
+&& (z,s, \tau, \kappa) \geq 0
+ \end{eqnarray}
+
+\section{Path Following Algorithm}
+
+\begin{enumerate}
+%###############################################
+\item Choose an initial point $(x_0, s_0, y_0, z_0, \tau_0, \kappa_0), \;\; s_0, z_0, \tau_0, \kappa_0 > 0$
+
+%###############################################
+\item Calculated residuals 
+\begin{eqnarray}
+&&\begin{bmatrix}
+r_1 \\
+r_2 \\
+r_3 \\
+r_4
+\end{bmatrix}
+= 
+\begin{bmatrix}
+0 \\
+0 \\
+s_0 \\
+\kappa_0
+\end{bmatrix}
+-\begin{bmatrix}
+0&  A^{T} & G^{T} & c\\
+-A& 0 & 0 & b\\
+-G & 0 & 0 & h \\
+-c^{T} & -b^{T} & -h^T& 0
+\end{bmatrix}
+ \begin{bmatrix}
+x_0 \\
+y_0 \\
+z_0 \\
+\tau_0
+\end{bmatrix}  
+\end{eqnarray}
+$$ \mu_0 = \frac{s_0^T z_0 + \tau_0 \kappa_0}{m+1}$$
+%###############################################
+\item{Solve for affine direction}
+\begin{eqnarray}
+&&
+\begin{bmatrix}
+0 \\
+0 \\
+\Delta s \\
+\Delta \kappa
+\end{bmatrix}
+-\begin{bmatrix}
+0&  A^{T} & G^{T} & c\\
+-A& 0 & 0 & b\\
+-G & 0 & 0 & h \\
+-c^{T} & -b^{T} & -h^T& 0
+\end{bmatrix}
+ \begin{bmatrix}
+\Delta x \\
+\Delta y \\
+\Delta z \\
+\Delta \tau
+\end{bmatrix}  =
+-\begin{bmatrix}
+r_1 \\
+r_2 \\
+r_3 \\
+r_4
+\end{bmatrix} \\
+&& \Delta z \bullet s_0 + z_0 \bullet \Delta s =  - z_0 \bullet s_0 \nonumber \\
+&& \Delta \tau \kappa_0 + \tau_0 \Delta \kappa = - \tau_0 \kappa_0 \nonumber
+\end{eqnarray}
+
+%###############################################
+\item Compute Step size  $\alpha$, and Centering Parameter $\sigma$
+$$ \alpha = \sup \{ \alpha \in [0,1] |  (x_0, s_0, y_0, z_0, \tau_0, \kappa_0) + \alpha (\Delta x_a, \Delta s_a, \Delta y_a, \Delta z_a, \Delta \tau_a, \Delta \kappa_a) \geq 0\}$$
+$$ \mu_a = \frac{(s_0 + \alpha \Delta s_a)^T (z_0 + \alpha \Delta z_a) + (\tau_0 + \alpha\Delta\tau_a) (\kappa_0 + \alpha\Delta\kappa_a)}{m+1}$$
+
+$$ \sigma = \frac{\mu_a}{\mu_0}\;\; \mbox{or} \;\;  \left(\frac{\mu_a}{\mu_0}\right)^3$$
+%###############################################
+\item Corrector direction
+\begin{eqnarray}
+&&
+\begin{bmatrix}
+0 \\
+0 \\
+\Delta s \\
+\Delta \kappa
+\end{bmatrix}
+-\begin{bmatrix}
+0&  A^{T} & G^{T} & c\\
+-A& 0 & 0 & b\\
+-G & 0 & 0 & h \\
+-c^{T} & -b^{T} & -h^T& 0
+\end{bmatrix}
+ \begin{bmatrix}
+\Delta x \\
+\Delta y \\
+\Delta z \\
+\Delta \tau
+\end{bmatrix}  =
+-(1-\sigma)\begin{bmatrix}
+r_1 \\
+r_2 \\
+r_3 \\
+r_4
+\end{bmatrix} \\
+&& \Delta z \bullet s_0 + z_0 \bullet \Delta s =  - z_0 \bullet s_0 - \Delta s_a \bullet \Delta z_a 
++ \sigma \mu_0 \nonumber \\
+&& \Delta \tau \kappa_0 + \tau_0 \Delta \kappa = - \tau_0 \kappa_0 -\Delta \tau_a \Delta \kappa_a
++ \sigma \mu_0 \nonumber
+\end{eqnarray}
+
+\item Update
+$$(x_{\mbox{new}}, s_{\mbox{new}}, y_{\mbox{new}}, z_{\mbox{new}}, \tau_{\mbox{new}}, \kappa_{\mbox{new}}) = (x_0, s_0, y_0, z_0, \tau_0, \kappa_0) + \alpha (\Delta x, \Delta s, \Delta y, \Delta z, \Delta \tau, \Delta \kappa) $$
+
+\end{enumerate}
+
+
+\section{Solving Linear Equations}
+Consider
+\begin{eqnarray}
+&&
+\begin{bmatrix}
+0 \\
+0 \\
+\Delta s \\
+\Delta \kappa
+\end{bmatrix}
+-\begin{bmatrix}
+0&  A^{T} & G^{T} & c\\
+-A& 0 & 0 & b\\
+-G & 0 & 0 & h \\
+-c^{T} & -b^{T} & -h^T& 0
+\end{bmatrix}
+ \begin{bmatrix}
+\Delta x \\
+\Delta y \\
+\Delta z \\
+\Delta \tau
+\end{bmatrix}  =
+\begin{bmatrix}
+q_1 \\
+q_2 \\
+q_3 \\
+q_4
+\end{bmatrix} \\
+&& \Delta z \bullet s_0 + z_0 \bullet \Delta s =  q_5 \nonumber \\
+&& \Delta \tau \kappa_0 + \tau_0 \Delta \kappa = q_6 \nonumber
+\end{eqnarray}
+
+Eliminating $\Delta \kappa$ and $\Delta s$:
+$$ \Delta s = (q_5 - \Delta z \bullet s_0)/z_0$$
+$$ \Delta \kappa = (q_6 - \Delta \tau \kappa_0)/\tau_0$$
+
+
+\begin{eqnarray}
+&&
+\begin{bmatrix}
+0 \\
+0 \\
+ (q_5 - \Delta z \bullet s_0)/z_0 \\
+(q_6 - \Delta \tau \kappa_0)/\tau_0
+\end{bmatrix}
+-\begin{bmatrix}
+0&  A^{T} & G^{T} & c\\
+-A& 0 & 0 & b\\
+-G & 0 & 0 & h \\
+-c^{T} & -b^{T} & -h^T& 0
+\end{bmatrix}
+ \begin{bmatrix}
+\Delta x \\
+\Delta y \\
+\Delta z \\
+\Delta \tau
+\end{bmatrix}  =
+\begin{bmatrix}
+q_1 \\
+q_2 \\
+q_3 \\
+q_4
+\end{bmatrix}
+\end{eqnarray}
+
+Or
+\begin{eqnarray}
+&&
+-\begin{bmatrix}
+0&  A^{T} & G^{T} & c\\
+-A& 0 & 0 & b\\
+-G & 0 & D_\tau & h \\
+-c^{T} & -b^{T} & -h^T& \kappa_0/\tau_0
+\end{bmatrix}
+ \begin{bmatrix}
+\Delta x \\
+\Delta y \\
+\Delta z \\
+\Delta \tau
+\end{bmatrix}  =
+\begin{bmatrix}
+q_1 \\
+q_2 \\
+q_7\\
+q_8
+\end{bmatrix}
+\end{eqnarray}
+where $D_\tau = \mbox{diag}(s_0/z_0)$, $q_7 = q_3 -q_5/z_0$, $q_8 = q_4 -q_6/\tau_0$
+
+eliminating $\Delta \tau$:
+$$ \Delta \tau = -\frac{q_8 - c^T\Delta x - b^T\Delta y - h^T \Delta z}{\kappa_0/\tau_0} $$
+
+More on Section 7.4 of "The CVXOPT" linear and quadratic cone program solver
+
+\end{document}
