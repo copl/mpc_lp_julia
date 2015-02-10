@@ -11,10 +11,10 @@ function interior_point_algorithm(problem_data::class_linear_program_input,	sett
 	state.update_mu(variables,problem_data)
 	
 
-	# allocate memory	
-	K_newton_matrix = class_K_newton_matrix(problem_data);
+	# allocate memory for working variables	
+	K_newton_matrix = class_K_newton_matrix(problem_data); # Data structure used to shaed info between two Linear Eq. Solver in affine direction and corrector step.
 	rhs = class_linear_system_rhs(problem_data);
-	direction = class_direction(problem_data);
+	direction = class_direction(problem_data); # Stores affine and corrector directions
 	residuals = class_residuals(problem_data);
 		
 	for itr =1:settings.max_iter
@@ -28,7 +28,7 @@ function interior_point_algorithm(problem_data::class_linear_program_input,	sett
 			break
 		end
 		
-		# compute affine rhs
+		# compute rhs for affine direction
 		rhs.compute_affine_rhs(residuals,variables)
 		# compute affine direction using new affine rhs
 		direction.compute_affine_direction(rhs,problem_data,variables,K_newton_matrix); # TO DO - FIX ORDER
@@ -46,7 +46,7 @@ function interior_point_algorithm(problem_data::class_linear_program_input,	sett
 		# take step in the corrector direction
 		variables.take_step(direction)
 	    
-		# compute the gap after the step
+		# compute the gap between primal and dual after the step
 		state.update_mu(variables,problem_data)
 		state.update_gap(variables,problem_data)
 		

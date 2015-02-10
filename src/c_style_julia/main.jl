@@ -1,17 +1,22 @@
 include("interior_point_algorithm.jl")
 
 function main() # this function is called at the bottom of the code
-	max_iter             = 20;
-    linear_feas_tol      = 1e-8;  
-    comp_tol            = 1e-8; 
-    bkscale              = 0.95  
+	max_iter             = 20;  Total number of iterarions
+    linear_feas_tol      = 1e-8;  # Threshold for feasibility of the linear constrains.
+    comp_tol            = 1e-8;  # Threshold for complementry optimality condition s^Tz
+    bkscale              = 0.95;  # Back scaling for line search.
+
+   # Initialize configuration variable
     settings = class_settings(max_iter,linear_feas_tol,comp_tol,bkscale);
 
 	srand(1234)
+ # We are creating an instance of LP. In practice, we should read the problem data from input stream.
 	problem_data = construct_instance1()
+        # The main function that run interior point algorithm.
 	interior_point_algorithm(problem_data,settings)
 end
 
+# Constructing a random LP
 function construct_instance1()
 	n = 5;
 	k = 10;
