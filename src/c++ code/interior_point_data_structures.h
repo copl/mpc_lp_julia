@@ -40,16 +40,36 @@ class class_direction {
 	float alpha;
 public:
 	class_direction();
-	void update_values();
-	void compute_affine_direction();
-	void compute_corrector_direction();
-	float get_alpha() {return alpha;}
-	float get_dtau() {return dtau;}
-	float get_dkappa() {return dkappa;}
-	class_vector get_dx() {return dx;}
-	class_vector get_dy() {return dy;}
-	class_vector get_dz() {return dz;}
-	class_vector get_ds() {return ds;}
+	void update_values(class_vector dx, class_vector dy, class_vector dz, class_vector ds, float dtau, float dkappa, float alpha);
+	void compute_affine_direction(	
+		class_linear_system_rhs affine_rhs,
+		class_linear_program_input problem_data,
+		class_linear_program_variables variables,
+		class_K_newton_matrix K_newton_matrix
+		);
+	void compute_corrector_direction(
+		class_linear_system_rhs corrector_rhs,
+		class_linear_program_input problem_data,
+		class_linear_program_variables variables,
+		class_algorithm_state state,
+		class_settings settings,
+		class_K_newton_matrix K_newton_matrix
+		);
+	void compute_alpha(
+		class_algorithm_state state,
+		class_settings settings
+		);
+	void compute_min_ratio_alpha (
+		class_vector var;
+		class_vector dvar;
+		);
+	float get_alpha();
+	float get_dtau(); 
+	float get_dkappa(); 
+	class_vector get_dx(); 
+	class_vector get_dy(); 
+	class_vector get_dz(); 
+	class_vector get_ds(); 
 
 };
 //--------End class_direction--------
@@ -75,7 +95,6 @@ public:
 
 //class_linear_program_input
 class class_linear_program_input {
-private:
 	class_matrix A;
 	class_matrix G;
 	
@@ -87,7 +106,7 @@ private:
 	int n;
 	int k;
 public:
-	class_linear_program_input() {return; }
+	class_linear_program_input();
 };
 //--------End class_linear_program_input--------
 
@@ -118,24 +137,8 @@ public:
 	class_linear_program_variables(class_linear_program_input problem_data);
 	void take_step(class_direction direction);
 };
-class_linear_program_variables::class_linear_program_variables(class_linear_program_input problem_data){
-
-	tau = 1;
-	kappa = 1;
-}
-
-void class_linear_program_variables::take_step(class_direction direction){
-	float alpha = direction.get_alpha();
-	//TODO: Implement class_vector.multiply and class_vector.add
-	// x = x.add(direction.get_dx.multiply(alpha));
-	// s = s.add(direction.get_ds.multiply(alpha));
-	// z = z.add(direction.get_dz.multiply(alpha));
-	// y = y.add(direction.get_dy.multiply(alpha));
-	tau = tau + alpha * direction.get_dtau();
-	kappa = kappa + alpha * direction.get_dkappa();
-
-}
 //--------End class_linear_program_variables--------
+
 //class_algorithm_state
 class class_algorithm_state {
 private:
@@ -149,16 +152,7 @@ public:
 	void update_gap (class_linear_program_variables variables, class_linear_program_input problem_data); //TODO
 };
 
-class_algorithm_state::class_algorithm_state() {
-	
-}
-void class_algorithm_state::update_mu(class_linear_program_variables variables, class_linear_program_input problem_data){
-	
-}
 
-void class_algorithm_state::update_gap(class_linear_program_variables variables, class_linear_program_input problem_data){
-
-}
 //--------End class_algorithm_state--------
 
 
@@ -180,12 +174,6 @@ public:
 	void compute_corrector_rhs(class_residuals residuals, class_linear_program_variables variables);
 
 };
-class_linear_system_rhs::class_linear_system_rhs(class_linear_program_input problem_data){
-
-}
-void class_linear_system_rhs::update_values(class_vector q1, class_vector q2, class_vector q3, class_vector q4, class_vector q5, class_vector q6){
-
-}
 
 //--------End class_linear_system_rhs--------
 
