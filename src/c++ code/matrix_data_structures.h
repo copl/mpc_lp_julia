@@ -5,12 +5,17 @@ class class_matrix {
 };
 
 class class_vector {
-	//this.multiply(A,x) = Ax
+	//	this.zeros() = 0
 	//
-	//this.add(x,y) = x + y
+	//	this.multiply(A,x) = Ax
 	//
-	//this.multiply_add(A,x) = Ax + this
-
+	//	this.add(x,y) = x + y
+	//
+	//	this.multiply_add(A,x) = this + Ax 
+	//
+	//	this.subtract(x,y) = x - y
+	//
+	//	this.multiply_subtract(A,x) = this - Ax
 };
 
 #endif

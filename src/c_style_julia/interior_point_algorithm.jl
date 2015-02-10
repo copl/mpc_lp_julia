@@ -10,6 +10,7 @@ function interior_point_algorithm(problem_data::class_linear_program_input,	sett
 	state = class_algorithm_state()
 	state.update_mu(variables,problem_data)
 	
+
 	# allocate memory	
 	K_newton_matrix = class_K_newton_matrix(problem_data);
 	rhs = class_linear_system_rhs(problem_data);
@@ -35,7 +36,7 @@ function interior_point_algorithm(problem_data::class_linear_program_input,	sett
 		# update corrector rhs using new affine direction
 		rhs.compute_corrector_rhs(residuals,variables,state,direction,problem_data)
 		# update corrector direction using new corrector rhs
-	    direction.compute_corrector_direction(direction,rhs,problem_data,
+	    direction.compute_corrector_direction(rhs,problem_data,
 											  variables,
 											  state,
 											  settings,
