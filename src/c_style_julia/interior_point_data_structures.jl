@@ -106,7 +106,7 @@ type class_linear_program_variables
 		
 		this.take_step = function(direction::class_direction)
 			alpha = direction.alpha; # get the step size
-			
+			1
 			this.x = this.x + alpha*direction.dx;
 			this.s = this.s + alpha*direction.ds;
 			this.y = this.y + alpha*direction.dy;
@@ -225,6 +225,11 @@ type class_residuals
 			r2 = pd.A*variables.x - pd.b*variables.tau;
 			r3 = variables.s + pd.G*variables.x - variables.tau*pd.h;
 			r4 = variables.kappa + pd.c'*variables.x + pd.b'*variables.y + + pd.h'*variables.z;
+			
+			debug_message("r1" + r1)
+			debug_message("r2" + r2)
+			debug_message("r3" + r3)
+			debug_message("r4" + r4)
 			
 			this.update_values(r1,r2,r3,r4)
 		end
