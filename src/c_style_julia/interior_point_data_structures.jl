@@ -145,6 +145,19 @@ type class_linear_system_rhs
 		
 		this.compute_affine_rhs = function(residuals::class_residuals,	variables::class_linear_program_variables)
 			this.update_values(-residuals.r1, -residuals.r2, -residuals.r3, -residuals.r4, -(variables.z).*(variables.s), -(variables.tau)*(variables.kappa))
+		
+			debug_message("q1")
+			debug_message(this.q1)
+			debug_message("q2")
+			debug_message(this.q2)
+			debug_message("q3")
+			debug_message(this.q3)
+			debug_message("q4")
+			debug_message(this.q4)
+			debug_message("q5")
+			debug_message(this.q5)
+			debug_message("q6")
+			debug_message(this.q6)
 		end
 		
 		this.compute_corrector_rhs = function(residuals::class_residuals,variables::class_linear_program_variables,state::class_algorithm_state,affine_direction::class_direction,problem_data::class_linear_program_input)
@@ -226,10 +239,14 @@ type class_residuals
 			r3 = variables.s + pd.G*variables.x - variables.tau*pd.h;
 			r4 = variables.kappa + pd.c'*variables.x + pd.b'*variables.y + + pd.h'*variables.z;
 			
-			debug_message("r1" + r1)
-			debug_message("r2" + r2)
-			debug_message("r3" + r3)
-			debug_message("r4" + r4)
+			debug_message("r1")
+			debug_message(r1)
+			debug_message("r2")
+			debug_message(r2)
+			debug_message("r3")
+			debug_message(r3)
+			debug_message("r4")
+			debug_message(r4)
 			
 			this.update_values(r1,r2,r3,r4)
 		end
