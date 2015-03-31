@@ -14,7 +14,7 @@ function main() # this function is called at the bottom of the code
 
 	srand(1234)
  # We are creating an instance of LP. In practice, we should read the problem data from input stream.
-	problem_data = construct_instance2();
+	problem_data = construct_instance3();
         # The main function that run interior point algorithm.
 	interior_point_algorithm(problem_data,settings);
 end
@@ -81,6 +81,35 @@ function construct_instance2() # example synced with c++
 	return(problem_data)
 end
 
+function construct_instance3()
+	f = open("example_problems/ex3sta1/ex3sta1.mtx")
+	
+	size_found = false
+	A = false
+	for ln in eachline(f)
+		if (length(ln) > 0 && ln[1] != '%')
+			sp = split(ln)
+			if ~size_found
+				n = int(sp[1])
+				m = int(sp[2])
+				nonzeros = int(sp[3])
+				
+				A = spzeros(n, m)
+				size_found = true
+			end
+			
+			if size_found
+				i = int(sp[1])
+				j = int(sp[2])
+				val = float(sp[3])
+				#print(i)
+				#print(j)
+				#print(val)
+				A[i,j] = val
+			end
+		end
+	end
+end
 
 
 ######################
