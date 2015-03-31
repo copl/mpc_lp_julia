@@ -106,7 +106,7 @@ type class_linear_program_variables
 		
 		this.take_step = function(direction::class_direction)
 			alpha = direction.alpha; # get the step size
-			
+			1
 			this.x = this.x + alpha*direction.dx;
 			this.s = this.s + alpha*direction.ds;
 			this.y = this.y + alpha*direction.dy;
@@ -145,6 +145,19 @@ type class_linear_system_rhs
 		
 		this.compute_affine_rhs = function(residuals::class_residuals,	variables::class_linear_program_variables)
 			this.update_values(-residuals.r1, -residuals.r2, -residuals.r3, -residuals.r4, -(variables.z).*(variables.s), -(variables.tau)*(variables.kappa))
+		
+			debug_message("q1")
+			debug_message(this.q1)
+			debug_message("q2")
+			debug_message(this.q2)
+			debug_message("q3")
+			debug_message(this.q3)
+			debug_message("q4")
+			debug_message(this.q4)
+			debug_message("q5")
+			debug_message(this.q5)
+			debug_message("q6")
+			debug_message(this.q6)
 		end
 		
 		this.compute_corrector_rhs = function(residuals::class_residuals,variables::class_linear_program_variables,state::class_algorithm_state,affine_direction::class_direction,problem_data::class_linear_program_input)
@@ -226,6 +239,15 @@ type class_residuals
 			r3 = variables.s + pd.G*variables.x - variables.tau*pd.h;
 			r4 = variables.kappa + pd.c'*variables.x + pd.b'*variables.y + + pd.h'*variables.z;
 			
+			debug_message("r1")
+			debug_message(r1)
+			debug_message("r2")
+			debug_message(r2)
+			debug_message("r3")
+			debug_message(r3)
+			debug_message("r4")
+			debug_message(r4)
+			
 			this.update_values(r1,r2,r3,r4)
 		end
 		
@@ -280,23 +302,40 @@ type class_direction
 			tau = variables.tau
 			kappa = variables.kappa
 			
-			dx_a = dir[1:k];
-			dy_a = dir[(k+1):(k+n)];
-			dz_a = dir[(k+n+1):(k+n+m)];
-			dtau_a = dir[(k+n+m+1)];
-			ds_a = ( -z.*s - dz_a.*s)./z;
-			dkappa_a = (-(tau)*(kappa) - dtau_a*(kappa))/(tau)
+			this.dx = dir[1:k];
+			this.dy = dir[(k+1):(k+n)];
+			this.dz = dir[(k+n+1):(k+n+m)];
+			this.dtau = dir[(k+n+m+1)];
+			this.ds = ( -z.*s - this.dz.*s)./z;
+			this.dkappa = (-(tau)*(kappa) - this.dtau*(kappa))/(tau)
 
 			# Compute Step size a, and Centering Parameter s
-			vv = vec([s./ds_a; z./dz_a; tau/dtau_a; kappa/dkappa_a]);
+			#vv = vec([s./ds_a; z./dz_a; tau/dtau_a; kappa/dkappa_a]);
+			#alpha = 1;
+			#for i=1:length(vv)
+			#	if (vv[i] < 0)
+			#		alpha = minimum([alpha, -vv[i]]);
+			#	end
+			#end
+			
+			this.alpha = 1;
+			this.compute_min_ratio_alpha(variables.s,this.ds)
+			this.compute_min_ratio_alpha(variables.z,this.dz)
+			this.compute_min_ratio_alpha([variables.kappa],[this.dkappa])
+			this.compute_min_ratio_alpha([variables.tau],[this.dtau])
+			
+			#this.update_values(dx_a,dy_a,dz_a,dtau_a,ds_a,dkappa_a,alpha)
+		end
+		
+		this.compute_alpha = function(state::class_algorithm_state,settings::class_settings)
+			vv = vec([(state.s)./ds; z./dz; tau/dtau; kappa/dkappa]);
 			alpha = 1;
 			for i=1:length(vv)
 				if (vv[i] < 0)
 					alpha = minimum([alpha, -vv[i]]);
 				end
 			end
-			
-			this.update_values(dx_a,dy_a,dz_a,dtau_a,ds_a,dkappa_a,alpha)
+			this.alpha = alpha*settings.bkscale
 		end
 		
 		this.compute_corrector_direction = function(
@@ -344,17 +383,6 @@ type class_direction
 			this.compute_min_ratio_alpha([variables.tau],[this.dtau])
 			this.alpha = this.alpha*settings.bkscale
 			#this.update_values(dx,dy,dz,dtau,ds,dkappa,alpha)
-		end
-		
-		this.compute_alpha = function(state::class_algorithm_state,settings::class_settings)
-			vv = vec([(state.s)./ds; z./dz; tau/dtau; kappa/dkappa]);
-			alpha = 1;
-			for i=1:length(vv)
-				if (vv[i] < 0)
-					alpha = minimum([alpha, -vv[i]]);
-				end
-			end
-			this.alpha = alpha*settings.bkscale
 		end
 		
 		this.compute_min_ratio_alpha = function(var,dvar)
