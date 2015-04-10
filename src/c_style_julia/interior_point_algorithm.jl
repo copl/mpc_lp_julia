@@ -18,7 +18,7 @@ function interior_point_algorithm(problem_data::class_linear_program_input,	sett
 		
 	for itr =1:settings.max_iter
 		# santiago's solver needs this
-		K_newton_matrix.update(variables);
+		@time K_newton_matrix.update(variables);
 		
 		# compute the residuals
 		residuals.compute_residuals(problem_data,variables);

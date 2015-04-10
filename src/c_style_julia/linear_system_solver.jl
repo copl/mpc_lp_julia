@@ -35,14 +35,12 @@ function solveLinearEquation(problem_data::class_linear_program_input,variables:
 	q5 = rhs.q5
 	q6 = rhs.q6
 	
-	
-	Q =  [ zeros(k,k)  A'          G'               c;
-     	      -A           zeros(n,n)  zeros(n, m)      b;
-	      -G           zeros(m,n)  diagm(vec(s./z))  h;
-	      -c'          -b'         -h'              kappa/tau];
-
 	q7 = q3 - q5./z;
-        q8 = q4 - q6./tau;
-
-        -Q\[q1; q2; q7; q8];
+    q8 = q4 - q6./tau;
+	
+	new_rhs = -[q1; q2; q7; q8];
+	
+	result = K_newton_matrix.F\new_rhs
+	
+    return(result)
 end

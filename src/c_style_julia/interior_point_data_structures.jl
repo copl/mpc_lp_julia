@@ -42,12 +42,28 @@ end
 
 type class_K_newton_matrix
 	update::Function
+	Q1
+	F
 	
 	function class_K_newton_matrix(problem_data::class_linear_program_input)
 		this = new();
+		n = problem_data.n
+		m = problem_data.m
+		k = problem_data.k
+		
+		this.Q1 = sparse([ spzeros(k,k)  problem_data.A'          problem_data.G'    sparse(problem_data.c);
+				 -problem_data.A           spzeros(n,n)  spzeros(n, m)      sparse(problem_data.b);])
+		
 		this.update = function(variables)
+			n = problem_data.n
+			m = problem_data.m
 			
+			Q2 = sparse([-problem_data.G           spzeros(m,n)  diagm(vec(variables.s./variables.z))  sparse(problem_data.h);
+					sparse(-problem_data.c')         sparse(-problem_data.b')        sparse(-problem_data.h')              sparse([variables.kappa/variables.tau])]);	
+			
+			this.F = factorize(sparse([this.Q1; Q2]));
 		end
+		
 		return(this);
 	end
 end

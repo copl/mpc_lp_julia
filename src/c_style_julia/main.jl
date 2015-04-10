@@ -5,9 +5,7 @@ include("interior_point_algorithm.jl")
 using MAT
 
 function main() # this function is called at the bottom of the code
-	
-	
-	max_iter             = 20;  # Total number of iterarions
+	max_iter             = 40;  # Total number of iterarions
     linear_feas_tol      = 1e-8;  # Threshold for feasibility of the linear constrains.
     comp_tol            = 1e-8;  # Threshold for complementry optimality condition s^Tz
     bkscale              = 0.95;  # Back scaling for line search.
@@ -24,7 +22,8 @@ function main() # this function is called at the bottom of the code
 	
 	println(variables.tau)
 	println(variables.kappa)
-	println(variables.x/variables.tau)
+	println(problem_data.c' * (variables.x/variables.tau))
+	#println(variables.x/variables.tau)
 	debug_message(variables.x/variables.kappa)
 end
 
@@ -60,8 +59,6 @@ function construct_instance2() # example synced with c++
 	m = 2;
 	n = 2; #3;
 	k = 4;
-	
-	
 	
 	x0 = [1; 1; 1; 1];
 
@@ -122,13 +119,13 @@ function construct_instance3()
 end
 
 function construct_instance4()
-	file = matopen("Problems/ADLITTLE.mat")
+	file = matopen("Problems/QAP8.mat")
 	A = read(file, "A")
 	n,k = size(A)
 	m = k
-	G = eye(m)
+	G = speye(m)
 	
-	c  = read(file,"c")
+	c = read(file,"c")
 	b = read(file,"b")
 	h = zeros(m,1)
 	
