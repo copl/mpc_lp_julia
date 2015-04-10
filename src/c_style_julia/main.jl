@@ -1,9 +1,12 @@
 function debug_message(message)
-	println(message)
+	#println(message)
 end
 include("interior_point_algorithm.jl")
+using MAT
 
 function main() # this function is called at the bottom of the code
+	
+	
 	max_iter             = 20;  # Total number of iterarions
     linear_feas_tol      = 1e-8;  # Threshold for feasibility of the linear constrains.
     comp_tol            = 1e-8;  # Threshold for complementry optimality condition s^Tz
@@ -13,13 +16,16 @@ function main() # this function is called at the bottom of the code
     settings = class_settings(max_iter,linear_feas_tol,comp_tol,bkscale);
 
 	srand(1234)
- # We are creating an instance of LP. In practice, we should read the problem data from input stream.
-	problem_data = construct_instance2();
-        # The main function that run interior point algorithm.
+	# We are creating an instance of LP. In practice, we should read the problem data from input stream.
+	problem_data = construct_instance4();
+	
+	# The main function that run interior point algorithm.
 	variables = interior_point_algorithm(problem_data,settings);
 	
+	println(variables.tau)
+	println(variables.kappa)
 	println(variables.x/variables.tau)
-	println(variables.x/variables.kappa)
+	debug_message(variables.x/variables.kappa)
 end
 
 # Constructing a random LP
@@ -56,7 +62,7 @@ function construct_instance2() # example synced with c++
 	k = 4;
 	
 	
-	problem_data = class_linear_program_input()
+	
 	x0 = [1; 1; 1; 1];
 
 	A = [1 0 0 0;
@@ -72,7 +78,7 @@ function construct_instance2() # example synced with c++
 	
 	#[x,fmin]=linprog(c,G,h,A,b)
 
-
+	problem_data = class_linear_program_input()
 	problem_data.A = A
 	problem_data.G = G
 	problem_data.c = c
@@ -115,6 +121,32 @@ function construct_instance3()
 	end
 end
 
+function construct_instance4()
+	file = matopen("Problems/ADLITTLE.mat")
+	A = read(file, "A")
+	n,k = size(A)
+	m = k
+	G = eye(m)
+	
+	c  = read(file,"c")
+	b = read(file,"b")
+	h = zeros(m,1)
+	
+	close(file)
+	
+	problem_data = class_linear_program_input()
+	problem_data.A = A
+	problem_data.G = -G
+	problem_data.c = c
+	problem_data.h = h
+	problem_data.b = b
+	
+	problem_data.m = m
+	problem_data.k = k
+	problem_data.n = n
+	
+	return(problem_data)
+end
 
 ######################
 #  run the program   #

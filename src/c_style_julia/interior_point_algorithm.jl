@@ -1,7 +1,6 @@
 include("interior_point_data_structures.jl")
 include("linear_system_solver.jl")
 
-
 function interior_point_algorithm(problem_data::class_linear_program_input,	settings::class_settings)
 
 	println("Iter \t gap     \t mu   \t alpha     \t tau       \t feasibility")
@@ -54,7 +53,7 @@ function interior_point_algorithm(problem_data::class_linear_program_input,	sett
 end
 
 function print_status(state, direction, variables, residuals, itr)
-	@printf("%3i\t%3.3e\t%3.3e\t%3.3e\t%3.3e\t%3.3e\n", itr, state.gap ,state.mu, direction.alpha, variables.tau, residuals.normed_squared)
+	@printf("%3i\t%3.3e\t%3.3e\t%3.3e\t%3.3e\t%3.3e\n", itr, state.gap, state.mu, direction.alpha, variables.tau, residuals.normed_squared)
 end
 
 function termination_criterion_met(settings::class_settings,state::class_algorithm_state,residuals::class_residuals)
