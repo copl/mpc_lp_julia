@@ -221,18 +221,6 @@ type class_residuals
 			this.normed_squared = 0
 		end
 		
-#r = [zeros(1,pd.k) zeros(1,pd.n) (variables.s)'  variables.kappa]' -
-#	[ zeros(pd.k,pd.k)  pd.A'          pd.G'           pd.c;
-#	 -pd.A           zeros(pd.n,pd.n)  zeros(pd.n,pd.m)  pd.b;
-#	 -pd.G           zeros(pd.m,pd.n)  zeros(pd.m,pd.m)  pd.h;
-#	 -pd.c'          -pd.b'         -pd.h'          0]*
-#	 [variables.x; variables.y; variables.z; variables.tau];
-
-#r1 = r[1:pd.k];
-#r2 = r[(pd.k+1):(pd.k+pd.n)];
-#r3 = r[(pd.k+pd.n+1):(pd.k+pd.n+pd.m)];
-#r4 = r[pd.k+pd.n+pd.m+1];
-		
 		this.compute_residuals = function(pd::class_linear_program_input, variables::class_linear_program_variables)
 			r1 = -pd.A'*variables.y - pd.G'*variables.z - pd.c*variables.tau;
 			r2 = pd.A*variables.x - pd.b*variables.tau;
@@ -285,9 +273,11 @@ type class_direction
 		end
 		
 		this.compute_affine_direction = function(affine_rhs::class_linear_system_rhs,
-													problem_data::class_linear_program_input,	
-													variables::class_linear_program_variables,	
-													K_newton_matrix::class_K_newton_matrix)
+									 problem_data::class_linear_program_input,
+                                     variables::class_linear_program_variables,
+									 state::class_algorithm_state,
+                                     settings::class_settings,
+									 K_newton_matrix::class_K_newton_matrix)
 			
 			dir = solveLinearEquation(problem_data, variables, affine_rhs, K_newton_matrix)
 			
@@ -309,33 +299,7 @@ type class_direction
 			this.ds = ( -z.*s - this.dz.*s)./z;
 			this.dkappa = (-(tau)*(kappa) - this.dtau*(kappa))/(tau)
 
-			# Compute Step size a, and Centering Parameter s
-			#vv = vec([s./ds_a; z./dz_a; tau/dtau_a; kappa/dkappa_a]);
-			#alpha = 1;
-			#for i=1:length(vv)
-			#	if (vv[i] < 0)
-			#		alpha = minimum([alpha, -vv[i]]);
-			#	end
-			#end
-			
-			this.alpha = 1;
-			this.compute_min_ratio_alpha(variables.s,this.ds)
-			this.compute_min_ratio_alpha(variables.z,this.dz)
-			this.compute_min_ratio_alpha([variables.kappa],[this.dkappa])
-			this.compute_min_ratio_alpha([variables.tau],[this.dtau])
-			
-			#this.update_values(dx_a,dy_a,dz_a,dtau_a,ds_a,dkappa_a,alpha)
-		end
-		
-		this.compute_alpha = function(state::class_algorithm_state,settings::class_settings)
-			vv = vec([(state.s)./ds; z./dz; tau/dtau; kappa/dkappa]);
-			alpha = 1;
-			for i=1:length(vv)
-				if (vv[i] < 0)
-					alpha = minimum([alpha, -vv[i]]);
-				end
-			end
-			this.alpha = alpha*settings.bkscale
+			this.compute_alpha(variables,settings)
 		end
 		
 		this.compute_corrector_direction = function(
@@ -376,13 +340,17 @@ type class_direction
 			this.dkappa = (-tau*kappa-dtau_a*dkappa_a + sigma*mu - (this.dtau)*kappa)/tau
 
 			# Update
-			this.alpha = 1;
+			this.compute_alpha(variables,settings)
+		end
+		
+		this.compute_alpha = function(variables::class_linear_program_variables,settings::class_settings)
+			this.alpha = 99999;
 			this.compute_min_ratio_alpha(variables.s,this.ds)
 			this.compute_min_ratio_alpha(variables.z,this.dz)
 			this.compute_min_ratio_alpha([variables.kappa],[this.dkappa])
 			this.compute_min_ratio_alpha([variables.tau],[this.dtau])
 			this.alpha = this.alpha*settings.bkscale
-			#this.update_values(dx,dy,dz,dtau,ds,dkappa,alpha)
+			this.alpha = min(1.0,this.alpha)
 		end
 		
 		this.compute_min_ratio_alpha = function(var,dvar)

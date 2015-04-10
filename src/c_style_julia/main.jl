@@ -14,9 +14,12 @@ function main() # this function is called at the bottom of the code
 
 	srand(1234)
  # We are creating an instance of LP. In practice, we should read the problem data from input stream.
-	problem_data = construct_instance3();
+	problem_data = construct_instance2();
         # The main function that run interior point algorithm.
-	interior_point_algorithm(problem_data,settings);
+	variables = interior_point_algorithm(problem_data,settings);
+	
+	println(variables.x/variables.tau)
+	println(variables.x/variables.kappa)
 end
 
 # Constructing a random LP
@@ -27,16 +30,16 @@ function construct_instance1()
 	
 	problem_data = class_linear_program_input()
 	x0 = rand(k,1)
-
+	
 	A = rand(n, k);
 	G = -diagm(ones(m));
-	c = rand(k,1)
+	c = rand(k,1);
 	h = zeros(m);
 	b = A*x0;
-
-
-	problem_data.A = A
-	problem_data.G = G
+	
+	
+	problem_data.A = A # equality constraints
+	problem_data.G = G # inequality constraints
 	problem_data.c = c
 	problem_data.h = h
 	problem_data.b = b
@@ -49,16 +52,15 @@ end
 
 function construct_instance2() # example synced with c++
 	m = 2;
-	n = 3;
+	n = 2; #3;
 	k = 4;
 	
 	
 	problem_data = class_linear_program_input()
-	x0 = [1, 1, 1, 1];
+	x0 = [1; 1; 1; 1];
 
 	A = [1 0 0 0;
-		0 1 0 0;
-		0 0 1 1];
+		0 1 0 0]; 
 	
 	G = [1 0 1 0;
 		0 1 0 1];
@@ -67,6 +69,8 @@ function construct_instance2() # example synced with c++
 	
 	b = A*x0;
 	h = G*x0;
+	
+	#[x,fmin]=linprog(c,G,h,A,b)
 
 
 	problem_data.A = A
