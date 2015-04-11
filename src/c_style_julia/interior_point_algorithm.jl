@@ -3,27 +3,32 @@ include("linear_system_solver.jl")
 
 function interior_point_algorithm(problem_data::class_linear_program_input,	settings::class_settings)
 
-	println("Iter \t gap     \t mu   \t alpha     \t tau       \t feasibility")
+	println("Iter\tgap \t      mu\talpha\ttau\tfeasibility")
 
 	variables = class_linear_program_variables(problem_data) 
 	state = class_algorithm_state()
 	state.update_mu(variables,problem_data)
 	
-
+	
 	# allocate memory for working variables	
-	K_newton_matrix = class_K_newton_matrix(problem_data); # Data structure used to shaed info between two Linear Eq. Solver in affine direction and corrector step.
+	K_newton_matrix = class_K_newton_matrix(problem_data); # Data structure used to share info between two Linear Eq. Solver in affine direction and corrector step.
 	rhs = class_linear_system_rhs(problem_data);
 	direction = class_direction(problem_data); # Stores affine and corrector directions
 	residuals = class_residuals(problem_data);
-		
-	for itr =1:settings.max_iter
+	
+	early_termination = false 
+	for itr = 1:settings.max_iter
 		# santiago's solver needs this
-		@time K_newton_matrix.update(variables);
+		#println("Time to construct K-newton matrix")
+		K_newton_matrix.update(variables);
 		
 		# compute the residuals
 		residuals.compute_residuals(problem_data,variables);
 		
 		if termination_criterion_met(settings,state,residuals)
+			early_termination = true
+			print_status(state, direction, variables, residuals, itr)
+			println("Termination criteron met")
 			break
 		end
 		
@@ -45,7 +50,10 @@ function interior_point_algorithm(problem_data::class_linear_program_input,	sett
 		state.update_gap(variables,problem_data)
 		
 		print_status(state, direction, variables, residuals, itr)
-		
+	end
+	
+	if ~early_termination
+		println("MAXIMUM ITERATIONS REACHED")		
 	end
 	
 	# TO DO RETURN MORE INFORMATION
@@ -53,7 +61,7 @@ function interior_point_algorithm(problem_data::class_linear_program_input,	sett
 end
 
 function print_status(state, direction, variables, residuals, itr)
-	@printf("%3i\t%3.3e\t%3.3e\t%3.3e\t%3.3e\t%3.3e\n", itr, state.gap, state.mu, direction.alpha, variables.tau, residuals.normed_squared)
+	@printf("%i\t%2.1e\t%2.1e\t%2.1e\t%2.1e\t%2.1e\n", itr, state.gap, state.mu, direction.alpha, variables.tau, residuals.residuals_norm)
 end
 
 function termination_criterion_met(settings::class_settings,state::class_algorithm_state,residuals::class_residuals)
@@ -61,14 +69,11 @@ function termination_criterion_met(settings::class_settings,state::class_algorit
 	# store a bunch of norms
 	
 	#Evaluate termination criteria	
-	#TODO: This part will have to be a more sofisticated test to detect 
+	#TODO: This part will have to be a more sophisticated test to detect 
 	#unbounded and infeasible problems.
 	
-	if (residuals.r1_norm < settings.linear_feas_tol && 
-		residuals.r2_norm < settings.linear_feas_tol &&
-		residuals.r3_norm < settings.linear_feas_tol && 
+	if (residuals.residuals_norm < settings.linear_feas_tol && 
 		state.mu < settings.comp_tol)
-		 println("Ended");
 		 return true
 	else
 		return false

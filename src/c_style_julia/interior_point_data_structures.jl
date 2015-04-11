@@ -48,20 +48,25 @@ type class_K_newton_matrix
 	function class_K_newton_matrix(problem_data::class_linear_program_input)
 		this = new();
 		n = problem_data.n
-		m = problem_data.m
+		m = problem_data.m 
 		k = problem_data.k
 		
 		this.Q1 = sparse([ spzeros(k,k)  problem_data.A'          problem_data.G'    sparse(problem_data.c);
 				 -problem_data.A           spzeros(n,n)  spzeros(n, m)      sparse(problem_data.b);])
 		
-		this.update = function(variables)
+		
+		this.update = function(variables::class_linear_program_variables)
 			n = problem_data.n
 			m = problem_data.m
 			
-			Q2 = sparse([-problem_data.G           spzeros(m,n)  diagm(vec(variables.s./variables.z))  sparse(problem_data.h);
-					sparse(-problem_data.c')         sparse(-problem_data.b')        sparse(-problem_data.h')              sparse([variables.kappa/variables.tau])]);	
+			#Q2 = sparse([]);	
+			this.F = sparse(
+				[this.Q1;
+				-problem_data.G           spzeros(m,n)  spdiagm(vec(variables.s./variables.z))  sparse(problem_data.h);
+				sparse(-problem_data.c')         sparse(-problem_data.b')        sparse(-problem_data.h')              sparse([variables.kappa/variables.tau])]
+				);
 			
-			this.F = factorize(sparse([this.Q1; Q2]));
+			this.F = lufact!(this.F);
 		end
 		
 		return(this);
@@ -122,7 +127,6 @@ type class_linear_program_variables
 		
 		this.take_step = function(direction::class_direction)
 			alpha = direction.alpha; # get the step size
-			1
 			this.x = this.x + alpha*direction.dx;
 			this.s = this.s + alpha*direction.ds;
 			this.y = this.y + alpha*direction.dy;
@@ -150,17 +154,13 @@ type class_linear_system_rhs
 	function class_linear_system_rhs(problem_data::class_linear_program_input)
 		this = new();
 		
-		this.update_values = function (q1,q2,q3,q4,q5,q6)
-			this.q1 = q1
-			this.q2 = q2
-			this.q3 = q3
-			this.q4 = q4
-			this.q5 = q5
-			this.q6 = q6
-		end
-		
 		this.compute_affine_rhs = function(residuals::class_residuals,	variables::class_linear_program_variables)
-			this.update_values(-residuals.r1, -residuals.r2, -residuals.r3, -residuals.r4, -(variables.z).*(variables.s), -(variables.tau)*(variables.kappa))
+			this.q1 = -residuals.r1
+			this.q2 = -residuals.r2
+			this.q3 = -residuals.r3
+			this.q4 = -residuals.r4
+			this.q5 = -(variables.z).*(variables.s)
+			this.q6 = -(variables.tau)*(variables.kappa)
 		
 			debug_message("q1")
 			debug_message(this.q1)
@@ -199,7 +199,12 @@ type class_linear_system_rhs
 			
 			state.sigma = sigma
 			
-			this.update_values(-(1-sigma)*residuals.r1, -(1-sigma)*residuals.r2, -(1-sigma)*residuals.r3, -(1-sigma)*residuals.r4, -z.*s -ds_a.*dz_a + sigma*mu,  -tau*kappa-dtau_a*dkappa_a + sigma*mu)
+			this.q1 = -(1-sigma)*residuals.r1
+			this.q2 = -(1-sigma)*residuals.r2
+			this.q3 = -(1-sigma)*residuals.r3 
+			this.q4 = -(1-sigma)*residuals.r4
+			this.q5 = -z.*s -ds_a.*dz_a + sigma*mu
+			this.q6 = -tau*kappa-dtau_a*dkappa_a + sigma*mu
 		end
 		
 		return this
@@ -215,44 +220,39 @@ type class_residuals
 	r1_norm::Real
 	r2_norm::Real
 	r3_norm::Real
-	normed_squared::Real
+	residuals_norm::Real
 	
 	
-	update_values::Function
+	update_norms::Function
 	compute_residuals::Function
 	
 	function class_residuals(problem_data::class_linear_program_input)
 		this = new();
 		
-		this.update_values = function(r1,r2,r3,r4)
-			this.r1 = r1
-			this.r2 = r2
-			this.r3 = r3
-			this.r4 = r4
+		this.update_norms = function()
+			this.r1_norm = Base.norm(this.r1)
+			this.r2_norm = Base.norm(this.r2)
+			this.r3_norm = Base.norm(this.r3)
 			
-			this.r1_norm = Base.norm(r1)
-			this.r2_norm = Base.norm(r2)
-			this.r3_norm = Base.norm(r3)
-			
-			this.normed_squared = 0
+			this.residuals_norm = sqrt((this.r1_norm)^2 + (this.r2_norm)^2 + (this.r3_norm)^2)
 		end
 		
 		this.compute_residuals = function(pd::class_linear_program_input, variables::class_linear_program_variables)
-			r1 = -pd.A'*variables.y - pd.G'*variables.z - pd.c*variables.tau;
-			r2 = pd.A*variables.x - pd.b*variables.tau;
-			r3 = variables.s + pd.G*variables.x - variables.tau*pd.h;
-			r4 = variables.kappa + pd.c'*variables.x + pd.b'*variables.y + + pd.h'*variables.z;
+			this.r1 = -pd.A'*variables.y - pd.G'*variables.z - pd.c*variables.tau;
+			this.r2 = pd.A*variables.x - pd.b*variables.tau;
+			this.r3 = variables.s + pd.G*variables.x - variables.tau*pd.h;
+			this.r4 = variables.kappa + pd.c'*variables.x + pd.b'*variables.y + pd.h'*variables.z;
 			
 			debug_message("r1")
-			debug_message(r1)
+			debug_message(this.r1)
 			debug_message("r2")
-			debug_message(r2)
+			debug_message(this.r2)
 			debug_message("r3")
-			debug_message(r3)
+			debug_message(this.r3)
 			debug_message("r4")
-			debug_message(r4)
+			debug_message(this.r4)
 			
-			this.update_values(r1,r2,r3,r4)
+			this.update_norms()
 		end
 		
 		return this

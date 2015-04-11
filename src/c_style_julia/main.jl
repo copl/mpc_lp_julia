@@ -3,22 +3,29 @@ function debug_message(message)
 end
 include("interior_point_algorithm.jl")
 using MAT
+using JuMP
+using Ipopt
 
 function main() # this function is called at the bottom of the code
 	max_iter             = 40;  # Total number of iterarions
-    linear_feas_tol      = 1e-8;  # Threshold for feasibility of the linear constrains.
-    comp_tol            = 1e-8;  # Threshold for complementry optimality condition s^Tz
-    bkscale              = 0.95;  # Back scaling for line search.
+    linear_feas_tol      = 1e-7;  # Threshold for feasibility of the linear constraints.
+    comp_tol            = 1e-7;  # Threshold for complementry optimality condition s^Tz
+    bkscale              = 0.98;  # Back scaling for line search.
 
    # Initialize configuration variable
     settings = class_settings(max_iter,linear_feas_tol,comp_tol,bkscale);
 
 	srand(1234)
 	# We are creating an instance of LP. In practice, we should read the problem data from input stream.
-	problem_data = construct_instance4();
+	problem_data = construct_instance_from_mat("Problems/QAP8.mat");
+	
+	#solve_with_JuMP(problem_data)
 	
 	# The main function that run interior point algorithm.
-	variables = interior_point_algorithm(problem_data,settings);
+	variables = @time interior_point_algorithm(problem_data,settings);
+	
+	# do we have an optimal solution ?
+	interpret_variables(variables)
 	
 	println(variables.tau)
 	println(variables.kappa)
@@ -26,6 +33,46 @@ function main() # this function is called at the bottom of the code
 	#println(variables.x/variables.tau)
 	debug_message(variables.x/variables.kappa)
 end
+
+function interpret_variables(variables)
+	if variables.tau > variables.kappa
+		println("Optimal solution found")
+	else:
+		println("Problem is infeasible or unbounded")
+	end
+end
+
+function solve_with_JuMP(problem_data::class_linear_program_input)
+	model = Model(solver=IpoptSolver())
+	k = problem_data.k
+	m = problem_data.m
+	n = problem_data.n
+	
+	A = problem_data.A
+	G = problem_data.G
+	c = problem_data.c
+	b = problem_data.b
+	h = problem_data.h
+	
+	@defVar(model, x[1:k] )
+	@setObjective(model, Min, sum{c[j]*x[j], j=1:k} )
+	
+	#Afull = full(A)
+	#indicies = M.rowval[a.colptr[col] : M.colptr[col+1]-1] 
+
+	for i = 1:n
+		@addConstraint(model, sum{A[i,j]*x[j], j=1:k} == b[i])
+	end
+	
+	for i = 1:m
+		@addConstraint(model, sum{G[i,j]*x[j], j=1:k} <= h[i])
+	end
+	
+	status = solve(model)
+
+	println("Objective value: ", getObjectiveValue(model))
+end
+
 
 # Constructing a random LP
 function construct_instance1()
@@ -118,9 +165,9 @@ function construct_instance3()
 	end
 end
 
-function construct_instance4()
-	file = matopen("Problems/QAP8.mat")
-	A = read(file, "A")
+function construct_instance_from_mat(filename)
+	file = matopen(filename)
+	A = sparse(read(file, "A"))
 	n,k = size(A)
 	m = k
 	G = speye(m)
@@ -130,6 +177,9 @@ function construct_instance4()
 	h = zeros(m,1)
 	
 	close(file)
+	
+	println("Reading Matlab file" * filename )
+	println("A matrix is size " * string((n,k)) * " and has " * string(nnz(A))  * " non-zeros")
 	
 	problem_data = class_linear_program_input()
 	problem_data.A = A
