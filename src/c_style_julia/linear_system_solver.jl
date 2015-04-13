@@ -35,8 +35,8 @@ function solveLinearEquation(problem_data::class_linear_program_input,variables:
 	q5 = rhs.q5
 	q6 = rhs.q6
 	
-	q7 = q3 - q5./z;
-    q8 = q4 - q6./tau;
+	q7 = rhs.q3 - rhs.q5./z;
+    q8 = rhs.q4 - rhs.q6./tau;
 	
 	new_rhs = -[q1; q2; q7; q8];
 	

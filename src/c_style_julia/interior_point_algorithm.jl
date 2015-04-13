@@ -1,5 +1,4 @@
 include("interior_point_data_structures.jl")
-include("linear_system_solver.jl")
 
 function interior_point_algorithm(problem_data::class_linear_program_input,	settings::class_settings)
 
@@ -11,7 +10,7 @@ function interior_point_algorithm(problem_data::class_linear_program_input,	sett
 	
 	
 	# allocate memory for working variables	
-	K_newton_matrix = class_K_newton_matrix(problem_data); # Data structure used to share info between two Linear Eq. Solver in affine direction and corrector step.
+	K_newton_matrix = class_K_newton_matrix(problem_data,settings); # Data structure used to share info between two Linear Eq. Solver in affine direction and corrector step.
 	rhs = class_linear_system_rhs(problem_data);
 	direction = class_direction(problem_data); # Stores affine and corrector directions
 	residuals = class_residuals(problem_data);

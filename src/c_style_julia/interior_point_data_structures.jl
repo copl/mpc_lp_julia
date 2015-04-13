@@ -25,11 +25,12 @@ type class_settings
 end
 
 type class_linear_program_input
-	A # matrix
-	G # matrix
-	c # vector
-	h # vector
-	b # vector
+	P::SparseMatrixCSC{Float64,Int64} # matrix
+	A::SparseMatrixCSC{Float64,Int64} # matrix
+	G::SparseMatrixCSC{Float64,Int64} # matrix
+	c::Array{Float64,1} # vector
+	h::Array{Float64,1} # vector
+	b::Array{Float64,1} # vector
 	m::Int
 	n::Int
 	k::Int
@@ -42,31 +43,66 @@ end
 
 type class_K_newton_matrix
 	update::Function
-	Q1
-	F
+	update2::Function
+	solve::Function
+	solve2::Function
 	
-	function class_K_newton_matrix(problem_data::class_linear_program_input)
+	n::Real
+	m::Real
+	k::Real
+	
+	Q::SparseMatrixCSC{Float64,Int64}
+	#Q2::SparseMatrixCSC{Float64,Int64}
+	F #::UmfpackLU{Float64,Int64} #::CholmodFactor
+	#F2 #::CholmodFactor{Float64,Int64}
+	#F2_defined::Bool
+	
+	function class_K_newton_matrix(problem_data::class_linear_program_input,settings::class_settings)
 		this = new();
-		n = problem_data.n
-		m = problem_data.m 
-		k = problem_data.k
+		n = problem_data.n;
+		m = problem_data.m;
+		k = problem_data.k;
 		
-		this.Q1 = sparse([ spzeros(k,k)  problem_data.A'          problem_data.G'    sparse(problem_data.c);
-				 -problem_data.A           spzeros(n,n)  spzeros(n, m)      sparse(problem_data.b);])
+		this.n = n;
+		this.m = m;
+		this.k = k;
 		
+		this.Q = sparse([ problem_data.P  problem_data.A'          problem_data.G'    sparse(problem_data.c);
+				 -problem_data.A           spzeros(n,n)  spzeros(n, m)      sparse(problem_data.b);
+				 -problem_data.G           spzeros(m,n)  speye(m)  sparse(problem_data.h);
+				sparse(-problem_data.c')         sparse(-problem_data.b')        sparse(-problem_data.h')       sparse([1.0])
+				]);
 		
+				
 		this.update = function(variables::class_linear_program_variables)
-			n = problem_data.n
-			m = problem_data.m
+			n = this.n
+			m = this.m
 			
-			#Q2 = sparse([]);	
-			this.F = sparse(
-				[this.Q1;
-				-problem_data.G           spzeros(m,n)  spdiagm(vec(variables.s./variables.z))  sparse(problem_data.h);
-				sparse(-problem_data.c')         sparse(-problem_data.b')        sparse(-problem_data.h')              sparse([variables.kappa/variables.tau])]
-				);
+			offset = k + n;
+			for i = 1:m
+				this.Q[offset + i,offset + i] = variables.s[i]/variables.z[i];
+			end
 			
-			this.F = lufact!(this.F);
+			this.Q[offset + m + 1, offset + m + 1] = variables.kappa/variables.tau;
+			
+			this.F = lufact(this.Q);
+			#@time lufact(this.Q2);
+			
+			#this.update2(variables);
+		end
+		
+		this.solve = function(problem_data::class_linear_program_input,variables::class_linear_program_variables,rhs::class_linear_system_rhs)
+			q7 = rhs.q3 - rhs.q5./variables.z;
+			q8 = rhs.q4 - rhs.q6./variables.tau;
+						
+			result = -(this.F\[rhs.q1; rhs.q2; q7; q8])
+			
+			return(result)
+		end
+		
+		this.solve2 = function(problem_data::class_linear_program_input,variables::class_linear_program_variables,rhs::class_linear_system_rhs)
+			real_rhs = [-problem_data.c; problem_data.b problem_data.h]
+			
 		end
 		
 		return(this);
@@ -106,10 +142,10 @@ type class_algorithm_state
 end
 
 type class_linear_program_variables 
-	x # vector
-	s # vector
-	z # vector
-	y # vector
+	x::Array{Float64,1} # vector
+	s::Array{Float64,1} # vector
+	z::Array{Float64,1} # vector
+	y::Array{Float64,1} # vector
 	tau::Real
 	kappa::Real
 	
@@ -118,10 +154,10 @@ type class_linear_program_variables
 	function class_linear_program_variables(problem_data::class_linear_program_input)
 		this = new();
 		
-		this.x = zeros(problem_data.k, 1);
-		this.s = ones(problem_data.m, 1);
-		this.z = ones(problem_data.m, 1);
-		this.y = zeros(problem_data.n, 1);
+		this.x = zeros(problem_data.k);
+		this.s = ones(problem_data.m);
+		this.z = ones(problem_data.m);
+		this.y = zeros(problem_data.n);
 		this.tau = 1;
 		this.kappa = 1;
 		
@@ -140,12 +176,12 @@ type class_linear_program_variables
 end
 
 type class_linear_system_rhs
-	q1 # vector
-	q2 # vector
-	q3 # vector
-	q4 # vector
-	q5 # vector
-	q6 # vector
+	q1::Array{Float64,1} # vector
+	q2::Array{Float64,1} # vector
+	q3::Array{Float64,1} # vector
+	q4::Array{Float64,1} # vector
+	q5::Array{Float64,1} # vector
+	q6::Real # vector
 	
 	update_values::Function
 	compute_affine_rhs::Function
@@ -194,8 +230,8 @@ type class_linear_system_rhs
 			
 			mu = state.mu
 			
-			mu_a = ((s+alpha*ds_a)'*(z+alpha*dz_a) + (tau + alpha*dtau_a)*((kappa) + alpha*dkappa_a))/(m+1);
-			sigma = ((mu_a/(mu))^3)[1]
+			mu_a = (((s+alpha*ds_a)'*(z+alpha*dz_a))[1] + (tau + alpha*dtau_a)*((kappa) + alpha*dkappa_a))/(m+1);
+			sigma = ((mu_a/(mu))^3)
 			
 			state.sigma = sigma
 			
@@ -212,10 +248,10 @@ type class_linear_system_rhs
 end
 
 type class_residuals
-	r1 # vector
-	r2 # vector
-	r3 # vector
-	r4 # vector
+	r1 #::Array{Float64,1} # vector
+	r2 #::Array{Float64,1} # vector
+	r3 #::Array{Float64,1} # vector
+	r4 #::Array{Float64,1} # vector
 	
 	r1_norm::Real
 	r2_norm::Real
@@ -260,10 +296,10 @@ type class_residuals
 end
 
 type class_direction
-	dx # vector
-	dy # vector
-	dz # vector
-	ds # vector
+	dx::Array{Float64,1} # vector
+	dy::Array{Float64,1} # vector
+	dz::Array{Float64,1} # vector
+	ds::Array{Float64,1} # vector
 	dtau::Real
 	dkappa::Real
 	alpha::Real
@@ -295,7 +331,7 @@ type class_direction
                                      settings::class_settings,
 									 K_newton_matrix::class_K_newton_matrix)
 			
-			dir = solveLinearEquation(problem_data, variables, affine_rhs, K_newton_matrix)
+			dir = K_newton_matrix.solve(problem_data, variables, affine_rhs)
 			
 			m = problem_data.m
 			n = problem_data.n
@@ -346,7 +382,7 @@ type class_direction
 			mu = state.mu
 			sigma = state.sigma
 			
-			dir = solveLinearEquation(problem_data, variables, corrector_rhs, K_newton_matrix);
+			dir = K_newton_matrix.solve(problem_data, variables, corrector_rhs);
 			
 			this.dx = dir[1:k];
 			this.dy = dir[(k+1):(k+n)];

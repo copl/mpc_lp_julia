@@ -1,16 +1,26 @@
+println("loading libraries")
+
 function debug_message(message)
 	#println(message)
 end
 include("interior_point_algorithm.jl")
+
+println("internal libraries loaded")
+
 using MAT
 using JuMP
+using Gurobi
 using Ipopt
 
+println("external libraries loaded")
+
+
 function main() # this function is called at the bottom of the code
+	
 	max_iter             = 40;  # Total number of iterarions
-    linear_feas_tol      = 1e-7;  # Threshold for feasibility of the linear constraints.
-    comp_tol            = 1e-7;  # Threshold for complementry optimality condition s^Tz
-    bkscale              = 0.98;  # Back scaling for line search.
+    linear_feas_tol      = 1e-6;  # Threshold for feasibility of the linear constraints.
+    comp_tol            = 1e-6;  # Threshold for complementry optimality condition s^Tz
+    bkscale              = 0.95;  # Back scaling for line search.
 
    # Initialize configuration variable
     settings = class_settings(max_iter,linear_feas_tol,comp_tol,bkscale);
@@ -19,7 +29,7 @@ function main() # this function is called at the bottom of the code
 	# We are creating an instance of LP. In practice, we should read the problem data from input stream.
 	problem_data = construct_instance_from_mat("Problems/QAP8.mat");
 	
-	#solve_with_JuMP(problem_data)
+	xTrue = solve_with_JuMP(problem_data)
 	
 	# The main function that run interior point algorithm.
 	variables = @time interior_point_algorithm(problem_data,settings);
@@ -29,9 +39,19 @@ function main() # this function is called at the bottom of the code
 	
 	println(variables.tau)
 	println(variables.kappa)
-	println(problem_data.c' * (variables.x/variables.tau))
+	
+	xOur = variables.x/variables.tau;
+	println("Our objective: " * string(get_objective_value(problem_data,xOur)))
+	
+	
+	println("JuMP objective: " * string(get_objective_value(problem_data,xTrue)))
 	#println(variables.x/variables.tau)
-	debug_message(variables.x/variables.kappa)
+	
+	println("Distance to JuMP solver solution: "* string(norm(xTrue - xOur)))
+end
+
+function get_objective_value(problem_data,x)
+	return(problem_data.c' * x + 0.5*x'*problem_data.P*x)
 end
 
 function interpret_variables(variables)
@@ -43,7 +63,8 @@ function interpret_variables(variables)
 end
 
 function solve_with_JuMP(problem_data::class_linear_program_input)
-	model = Model(solver=IpoptSolver())
+	model = Model(solver=GurobiSolver())
+	#model = Model(solver=IpoptSolver())
 	k = problem_data.k
 	m = problem_data.m
 	n = problem_data.n
@@ -55,7 +76,7 @@ function solve_with_JuMP(problem_data::class_linear_program_input)
 	h = problem_data.h
 	
 	@defVar(model, x[1:k] )
-	@setObjective(model, Min, sum{c[j]*x[j], j=1:k} )
+	@setObjective(model, Min, sum{c[j]*x[j] + 20*0.5*x[j]*x[j], j=1:k} )
 	
 	#Afull = full(A)
 	#indicies = M.rowval[a.colptr[col] : M.colptr[col+1]-1] 
@@ -71,6 +92,16 @@ function solve_with_JuMP(problem_data::class_linear_program_input)
 	status = solve(model)
 
 	println("Objective value: ", getObjectiveValue(model))
+	
+	# convert to standard array
+	xJuMP = getValue(x)
+	xTrue = zeros(k)
+	
+	for i = 1:k
+		xTrue[i] = xJuMP[i]
+	end
+	
+	return(xTrue)
 end
 
 
@@ -166,11 +197,13 @@ function construct_instance3()
 end
 
 function construct_instance_from_mat(filename)
+	println("Reading Matlab file " * filename )
+
 	file = matopen(filename)
 	A = sparse(read(file, "A"))
 	n,k = size(A)
 	m = k
-	G = speye(m)
+	G = -speye(m)
 	
 	c = read(file,"c")
 	b = read(file,"b")
@@ -178,15 +211,24 @@ function construct_instance_from_mat(filename)
 	
 	close(file)
 	
-	println("Reading Matlab file" * filename )
+	#max_norm = 0;
+	#min_norm = 999999;
+	#for j = 1:k
+	#	max_norm = max(max_norm,norm(A[:,j]))
+	#	min_norm = min(min_norm,norm(A[:,j]))
+	#end
+	#println(max_norm)
+	#println(min_norm)
+	
 	println("A matrix is size " * string((n,k)) * " and has " * string(nnz(A))  * " non-zeros")
 	
 	problem_data = class_linear_program_input()
-	problem_data.A = A
-	problem_data.G = -G
-	problem_data.c = c
-	problem_data.h = h
-	problem_data.b = b
+	problem_data.P = 20*speye(k,k)
+	problem_data.A = sparse(A)
+	problem_data.G = sparse(G)
+	problem_data.c = c[:]
+	problem_data.h = h[:]
+	problem_data.b = b[:]
 	
 	problem_data.m = m
 	problem_data.k = k
