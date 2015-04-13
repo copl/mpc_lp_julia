@@ -78,12 +78,23 @@ type class_K_newton_matrix
 			n = this.n
 			m = this.m
 			
+			# update diagonal
 			offset = k + n;
 			for i = 1:m
 				this.Q[offset + i,offset + i] = variables.s[i]/variables.z[i];
 			end
 			
 			this.Q[offset + m + 1, offset + m + 1] = variables.kappa/variables.tau;
+			
+			# update gradient
+			last_entry = k + n + m + 1
+			grad = problem_data.P*(variables.x/variables.tau) + problem_data.c;
+			
+			#for i = 1:k
+			#	this.Q[last_entry, i] = -grad[i] 
+			#	this.Q[i, last_entry] = grad[i]
+			#end
+			
 			
 			this.F = lufact(this.Q);
 			#@time lufact(this.Q2);
@@ -100,10 +111,10 @@ type class_K_newton_matrix
 			return(result)
 		end
 		
-		this.solve2 = function(problem_data::class_linear_program_input,variables::class_linear_program_variables,rhs::class_linear_system_rhs)
-			real_rhs = [-problem_data.c; problem_data.b problem_data.h]
-			
-		end
+		#this.solve2 = function(problem_data::class_linear_program_input,variables::class_linear_program_variables,rhs::class_linear_system_rhs)
+		#	real_rhs = [-problem_data.c; problem_data.b problem_data.h]
+		#	
+		#end
 		
 		return(this);
 	end
@@ -134,7 +145,8 @@ type class_algorithm_state
 		end
 		
 		this.update_gap = function(variables::class_linear_program_variables,problem_data::class_linear_program_input)
-			this.gap = ((problem_data.c)'*(variables.x) + (problem_data.h)'*(variables.z) + (problem_data.b)'*(variables.y))[1];
+			grad = problem_data.P*(variables.x/variables.tau) + problem_data.c;
+			this.gap = ((grad)'*(variables.x) + (problem_data.h)'*(variables.z) + (problem_data.b)'*(variables.y))[1];
 		end
 		
 		return(this)
@@ -274,10 +286,12 @@ type class_residuals
 		end
 		
 		this.compute_residuals = function(pd::class_linear_program_input, variables::class_linear_program_variables)
-			this.r1 = -pd.A'*variables.y - pd.G'*variables.z - pd.c*variables.tau;
+			grad = problem_data.P*(variables.x/variables.tau) + problem_data.c;
+			
+			this.r1 = -pd.A'*variables.y - pd.G'*variables.z - grad*variables.tau;
 			this.r2 = pd.A*variables.x - pd.b*variables.tau;
 			this.r3 = variables.s + pd.G*variables.x - variables.tau*pd.h;
-			this.r4 = variables.kappa + pd.c'*variables.x + pd.b'*variables.y + pd.h'*variables.z;
+			this.r4 = variables.kappa + grad'*variables.x + pd.b'*variables.y + pd.h'*variables.z;
 			
 			debug_message("r1")
 			debug_message(this.r1)

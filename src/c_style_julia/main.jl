@@ -17,10 +17,10 @@ println("external libraries loaded")
 
 function main() # this function is called at the bottom of the code
 	
-	max_iter             = 40;  # Total number of iterarions
+	max_iter             = 50;  # Total number of iterarions
     linear_feas_tol      = 1e-6;  # Threshold for feasibility of the linear constraints.
     comp_tol            = 1e-6;  # Threshold for complementry optimality condition s^Tz
-    bkscale              = 0.95;  # Back scaling for line search.
+    bkscale              = 0.98;  # Back scaling for line search.
 
    # Initialize configuration variable
     settings = class_settings(max_iter,linear_feas_tol,comp_tol,bkscale);
@@ -42,9 +42,12 @@ function main() # this function is called at the bottom of the code
 	
 	xOur = variables.x/variables.tau;
 	println("Our objective: " * string(get_objective_value(problem_data,xOur)))
-	
-	
 	println("JuMP objective: " * string(get_objective_value(problem_data,xTrue)))
+	
+	println("Our feasiblity: " * string(calculate_feasibility(problem_data,xOur)))
+	println("JuMP feasibility: " * string(calculate_feasibility(problem_data,xTrue)))
+	
+	
 	#println(variables.x/variables.tau)
 	
 	println("Distance to JuMP solver solution: "* string(norm(xTrue - xOur)))
@@ -52,6 +55,10 @@ end
 
 function get_objective_value(problem_data,x)
 	return(problem_data.c' * x + 0.5*x'*problem_data.P*x)
+end
+
+function calculate_feasibility(problem_data,x)
+	return norm([problem_data.A*x - problem_data.b, max(problem_data.G*x - problem_data.h,0)])
 end
 
 function interpret_variables(variables)
