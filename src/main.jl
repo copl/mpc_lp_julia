@@ -1,3 +1,8 @@
+# TO DO
+# UPDATE primal feasibility to work with non-linear constraints
+# add merit function
+# 
+
 println("loading libraries")
 
 function debug_message(message)
@@ -9,10 +14,10 @@ end
 
 using MAT
 using JuMP
-using Gurobi
+#using Gurobi
 using Ipopt
 using KNITRO
-using SCS
+#using SCS
 println("external libraries loaded")
 
 include("interior_point_algorithm.jl")
@@ -21,13 +26,24 @@ println("internal libraries loaded")
 
 function main() # this function is called at the bottom of the code
 	
-	max_iter            = 100;  # Total number of iterarions
-    linear_feas_tol     = 1e-10;  # Threshold for feasibility of the linear constraints.
-    comp_tol            = 1e-10;  # Threshold for complementry optimality condition s^Tz
-    bkscale             = 0.7;  # Back scaling for line search.
+	settings = class_settings();
+	
+	settings.max_iter = 100;  # Total number of iterarions
+	settings.bkscale             = 0.95;  # Back scaling for line search.
+	
+	settings.primal_feas_tol = 1e-8
+	settings.dual_feas_tol = 1e-8
+	settings.duality_gap_tol = 1e-8
+	settings.primal_infeas_tol = 1e-8
+	settings.dual_infeas_tol = 1e-8
+	
+	
+    #linear_feas_tol     = 1e-10;  # Threshold for feasibility of the linear constraints.
+    #comp_tol            = 1e-10;  # Threshold for complementry optimality condition s^Tz
+    
 
 	# Initialize configuration variable
-    settings = class_settings(max_iter,linear_feas_tol,comp_tol,bkscale);
+    
 
 	#nonlinear_random_points_test(settings)
 	lp_test(settings)
@@ -39,35 +55,45 @@ end
 function lp_test(settings)
 	problem_data = construct_instance_from_mat("Problems/blend.mat");
 	problem_data.barrier_weights = ones(problem_data.m);# - 1.0*log(rand(problem_data.m))
-	problem_data.add_inequality_constraint(problem_data.c',-30.84,1.0)
+	#problem_data.c = -ones(problem_data.k);
 	
-	#add_nonlinear_constraints(problem_data)
+	#di = rand(problem_data.k)
+	#di[1:10] = 0;
+	#problem_data.P = spdiagm(di)
+	
+	#problem_data.add_inequality_constraint(ones(problem_data.k)',1000,1.0)
+	#add_nonlinear_objective3(problem_data)
+	#problem_data.add_inequality_constraint(problem_data.c',-30.84,1.0)
+	add_nonlinear_constraints(problem_data)
+	
+	add_nonlinear_constraints(problem_data)
+	
 	
 	variables = class_linear_program_variables(problem_data);
 	variables, status = @time interior_point_algorithm(problem_data,settings,variables);
 	
-	solve_with_JuMP(problem_data)
+	#solve_with_JuMP(problem_data)
 	
 	print_status(status,variables,problem_data)
 end
 
 function print_status(status,variables,problem_data)
-	if status == [true,true]
+	if status["primal_feasible"] == true && status["dual_feasible"] == true
 		xOur = variables.x/variables.tau;
 		value = problem_data.currentObjectiveValue;
 		println("Our objective: " * string(value))
 		println("Our feasiblity: " * string(calculate_feasibility(problem_data,xOur)))
 		println("Our x norm: " * string(norm(xOur,2)))
 	elseif length(status) == 2
-		if status[1] == false
+		if status["primal_feasible"] == false
 			println("primal locally infeasible")
 		end
-		if status[2] == false
+		if status["dual_feasible"] == false
 			println("dual locally infeasible")
 		end
-		if status[1] == false
+		if status["primal_feasible"] == false
 			println("i.e. linear approximation of constraints at current point is infeasible")
-		elseif status[2] == false
+		elseif status["dual_feasible"] == false
 			println("i.e. problem is locally unbounded")
 		end
 	elseif status == -1
@@ -178,8 +204,8 @@ end
 
 function solve_with_JuMP(problem_data::class_linear_program_input)
 	#model = Model(solver=GurobiSolver())
-	#model = Model(solver=IpoptSolver())
-	model = Model(solver=KnitroSolver()) #ms_enable=1
+	model = Model(solver=IpoptSolver())
+	#model = Model(solver=KnitroSolver()) #ms_enable=1
 	#model = Model(solver=SCSSolver())
 	k = problem_data.k
 	m = problem_data.m
@@ -193,7 +219,7 @@ function solve_with_JuMP(problem_data::class_linear_program_input)
 	
 	@defVar(model, x[1:k], start = rand()*20) #rand()*2000 )
 	#@setObjective(model, Min, sum{c[j]*x[j] + -0.001*x[j]*x[j] , j=1:k} ) # + -2*0.5*x[j]*x[j]
-	@setNLObjective( model, Min, sum{ c[j]*x[j] , j=1:k} ) # + -2*0.5*x[j]*x[j] 
+	@setNLObjective( model, Min, sum{ c[j]*x[j] + x[j]*x[j] , j=1:k} ) # + -2*0.5*x[j]*x[j] 
 	# 0.000001*(-(x[j]-5.0)^2)
 	
 	#+ 0.01*x[j]^2
@@ -317,7 +343,7 @@ function construct_instance3()
 	end
 end
 
-function construct_instance_from_mat(filenamelp,filenameqp=false)
+function construct_instance_from_mat(filenamelp)
 	println("Reading Matlab file for lp input " * filenamelp )
 
 	file = matopen(filenamelp)
@@ -330,19 +356,6 @@ function construct_instance_from_mat(filenamelp,filenameqp=false)
 	b = read(file,"b")
 	h = zeros(m,1)
 	
-	close(file)
-	
-	if filenameqp != false
-		println("Reading Matlab file for QP input " * filenameqp )
-
-		file = matopen(filenameqp)
-		Q = sparse(read(file, "A"))
-		P = Q'*Q;
-		
-		close(file)
-	else
-		#P = -0.01*eye(k,k)
-	end
 	#max_norm = 0;
 	#min_norm = 999999;
 	#for j = 1:k
@@ -373,6 +386,31 @@ function construct_instance_from_mat(filenamelp,filenameqp=false)
 	problem_data.barrier_weights = ones(problem_data.m);
 	
 	return(problem_data)
+end
+
+
+function add_convex_objective(problem_data)
+	k = problem_data.k
+		
+	#_c = problem_data.c;
+	objective = function(x)
+		return 1.0*()[1] # - 0.0001*sum(x.^2)
+		#return (_c' * (x)) [1] 
+	end
+	
+	gradient = function(x)
+		xPos = max(x,0)
+		return 1.0*(-ones(k) + 0.02*x  + 0.1*0.5*(x+1).^(-0.5)) #  - 2*0.0001*x
+		#return _c
+	end
+	
+	hessian = function(x)
+		di = 0.02*ones(k) + -0.1*0.25*(x+1).^(-1.5); 
+		return 1.0*spdiagm(di)  # - minimum([0,di]) + 0.0001 # #spdiagm( -0.25*(variables.x + 1).^(-1.5) ) #spzeros(length(variables.x),length(variables.x))#
+		#return spzeros(length(x),length(x))
+	end
+	
+	problem_data.add_black_box_objective(objective,gradient,hessian)
 end
 
 function add_nonlinear_objective(problem_data)
@@ -444,7 +482,7 @@ function add_nonlinear_objective3(problem_data)
 	
 	hessian = function(x)
 		di = -2; 
-		return 0.001*speye(k,k)#1.0*spdiagm(di)  # - minimum([0,di]) + 0.0001 # #spdiagm( -0.25*(variables.x + 1).^(-1.5) ) #spzeros(length(variables.x),length(variables.x))#
+		return 1.0*speye(k,k) #1.0*spdiagm(di)  # - minimum([0,di]) + 0.0001 # #spdiagm( -0.25*(variables.x + 1).^(-1.5) ) #spzeros(length(variables.x),length(variables.x))#
 		#return spzeros(length(x),length(x))
 	end
 	
@@ -455,18 +493,21 @@ function add_nonlinear_constraints(problem_data)
 	
 	_h = copy(problem_data.h);
 	evaluate_inequality_constraint = function(x)
-		return [problem_data.G[1:(problem_data.m-1),:]*x; x'*x] - [_h[1:problem_data.m-1]; 1000];  #  - 2*0.0001*x
+		#return [problem_data.G[1:(problem_data.m-1),:]*x; ones(problem_data.k)'*x] - [_h[1:problem_data.m-1]; 10];
+		return [problem_data.G[1:(problem_data.m-1),:]*x; x'*x] - [_h[1:problem_data.m-1]; 10000];  #  - 2*0.0001*x
 		#  -0.01*(x'*x)[1] * ones(problem_data.m) + 
 		#return _c
 	end
 	
 	evaluate_inequality_constraint_gradients = function(x)
+		#return sparse([problem_data.G[1:(problem_data.m-1),:]; ones(problem_data.k)'])
 		return sparse([problem_data.G[1:(problem_data.m-1),:]; 2*x']); # - minimum([0,di]) + 0.0001 # #spdiagm( -0.25*(variables.x + 1).^(-1.5) ) #spzeros(length(variables.x),length(variables.x))#
 		#-0.01*2*ones(problem_data.k)*x' + 
 		#return spzeros(length(x),length(x))
 	end
 	
 	evaluate_inequality_constraint_lagrangian = function(x,z)
+		#return spzeros(problem_data.k,problem_data.k)
 		return 2*speye(problem_data.k)*z[problem_data.m]; # - minimum([0,di]) + 0.0001 # #spdiagm( -0.25*(variables.x + 1).^(-1.5) ) #spzeros(length(variables.x),length(variables.x))#
 		#-0.01*2*ones(problem_data.k)*x' + 
 		#return spzeros(length(x),length(x))

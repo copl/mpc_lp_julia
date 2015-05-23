@@ -5,25 +5,20 @@ end
 #Settings for the algorithm
 type class_settings
     
-    max_iter::Int            
-    linear_feas_tol::Real   #This is a relative tolerance w.r.t. 
-                                 #some normalizing norms
-    comp_tol::Real          #How small must s^Tz must be when we stop
-
+    max_iter::Int   
+	
+	primal_feas_tol::Real
+	dual_feas_tol::Real
+	duality_gap_tol::Real
+	primal_infeas_tol::Real
+	dual_infeas_tol::Real
+	
     #Constant length of the 
     #maximum combined step to the boundary to use
     bkscale::Real
-    
-    #Configuration for solver
-    linear_solver_settings 
 
-    function class_settings(max_iter::Int,linear_feas_tol::Real,comp_tol::Real,
-                            bkscale::Real)
+    function class_settings()
         this = new()
-        this.max_iter = max_iter
-        this.linear_feas_tol = linear_feas_tol
-        this.comp_tol        = comp_tol
-        this.bkscale         = bkscale
         return this
     end
 end
@@ -87,7 +82,8 @@ type class_linear_program_input
 				this.h = [this.h; rhs];
 				this.barrier_weights = [this.barrier_weights, barrier_weight];
 			else
-				Error("black box constraints and adding constraints is dangerous!")
+				println("black box constraints and adding constraints is dangerous!")
+				Error()
 			end
 		end
 		
@@ -129,6 +125,8 @@ type class_linear_program_input
 					this.h = this.G*xNormalized - this.evaluate_inequality_constraints(xNormalized);
 					
 					this.L = this.L + this.evaluate_inequality_constraint_lagrangian(xNormalized,zNormalized);
+					println("z norm " * string(norm(zNormalized,1)))
+					println("x/tau norm " * string(norm(xNormalized,1)))
 				end
 								 
 			catch e
@@ -196,6 +194,7 @@ type class_K_newton_matrix
 	F #::UmfpackLU{Float64,Int64} #::CholmodFactor
 	#F2 #::CholmodFactor{Float64,Int64}
 	#F2_defined::Bool
+	calc_inertia::Function
 	
 	function class_K_newton_matrix(problem_data::class_linear_program_input,settings::class_settings)
 		this = new();
@@ -313,8 +312,48 @@ type class_K_newton_matrix
 			
 			this.F = lufact(this.Q);
 			#@time lufact(this.Q2);
-			
+			#println(diag(this.F[:L]))
+			#println(diag(this.F[:U]))
 			#this.update2(variables);
+			
+			
+			#Q2 = sparse([ problem_data.L   problem_data.A'          problem_data.G' ;
+			#	 problem_data.A           spzeros(n,n)  spzeros(n, m)     ;
+			#	 problem_data.G           spzeros(m,n)  -spdiagm((variables.s)./variables.z);
+			#	])
+			#F3 = ldltfact(Q2)
+			#F2 = qrfact(Q2)
+			
+			#inertia = this.calc_inertia(F2);
+			#expected_inertia = (n+m,l+m,0) # pg 5. (3.6) Knitro: An Integrated Package for Nonlinear Optimization
+			#println((k,m,n))
+			#expected_inertia = (n,k+m,0)
+			#println(inertia)
+			#println(expected_inertia)
+		end
+		
+		this.calc_inertia = function(F)
+			# TO DO
+			# need LDL factorization
+			perturbed_eigens = diag(F[:R])
+			#print("lu factor correct ")
+			#print(norm(F[:L]*diagm(1./diag(F[:L]))-F[:U]'*diagm(1./diag(F[:U]))))
+			#print("\n")
+			
+			pos_eigs = 0
+			neg_eigs = 0
+			zero_eigs = 0
+			for val in perturbed_eigens
+				if val > 0
+					pos_eigs = pos_eigs + 1
+				elseif val < 0
+					neg_eigs = neg_eigs + 1
+				else
+					zero_eigs = zero_eigs + 1
+				end
+			end
+			
+			return pos_eigs, neg_eigs, zero_eigs
 		end
 		
 		this.solve = function(problem_data::class_linear_program_input,variables::class_linear_program_variables,rhs::class_linear_system_rhs)
@@ -378,6 +417,7 @@ type class_linear_program_variables
 	kappa::Real
 	
 	take_step::Function
+	line_search::Function
 	check::Function
 	
 	function class_linear_program_variables(problem_data::class_linear_program_input)
@@ -415,6 +455,53 @@ type class_linear_program_variables
 				println("one variable is less than or equal to zero")
 				throw(e)
 			end
+		end
+		
+		this.line_search = function(direction,residuals,problem_data)
+			variables = this;
+			
+			orginal_obj = residuals.summary_norm;
+			
+			variables.take_step(direction)
+			residuals.compute_residuals(problem_data,variables)
+			best_obj = residuals.summary_norm;
+			last_step = direction.alpha;
+			best_step = last_step;
+			next_step = last_step;
+			
+			if true
+				for i = 1:5
+					try
+						next_step = last_step*0.6
+						direction.alpha = next_step - last_step
+						variables.take_step(direction)
+						variables.check()
+						problem_data.update(variables)
+						residuals.compute_residuals(problem_data,variables)
+						
+						if residuals.summary_norm < best_obj
+							best_obj = residuals.summary_norm;
+							best_step = next_step;
+						end
+						last_step = next_step;
+					catch e
+						println("error " * string(i))
+						throw(e)
+					end
+				end
+			end
+			
+			direction.alpha = best_step - next_step;
+			variables.take_step(direction)
+			direction.alpha = best_step;
+			
+			if orginal_obj <= best_obj
+				println("error, residuals norm did not decrease")
+			end
+			
+			println("best step" * string(best_step))
+			println("best value" * string(best_obj))
+			
 		end
 		
 		return(this)
@@ -483,8 +570,8 @@ type class_linear_system_rhs
 				mu = state.mu
 				
 				mu_a = (((s+alpha*ds_a)'*(z+alpha*dz_a))[1] + (tau + alpha*dtau_a)*((kappa) + alpha*dkappa_a))/(m+1);
+				#sigma = ((mu_a/(mu))^3)
 				sigma = ((mu_a/(mu))^3)
-				
 				state.sigma = sigma
 				
 				this.q1 = -(1-sigma)*residuals.r1
@@ -505,20 +592,27 @@ type class_linear_system_rhs
 end
 
 type class_residuals
-	r1 #::Array{Float64,1} # vector
-	r2 #::Array{Float64,1} # vector
-	r3 #::Array{Float64,1} # vector
-	r4 #::Array{Float64,1} # vector
+	r1::Array{Float64,1} # vector
+	r2::Array{Float64,1} # vector
+	r3::Array{Float64,1} # vector
+	r4 #::Array{Float64,1} # real
 	
 	r1_norm::Real
 	r2_norm::Real
 	r3_norm::Real
 	r4_norm::Real	
-	summary_norm::Real
-	kkt_is_infeasible::Real
 	
-	primal_feasibility::Real
+	
+	homogeneous_dual_objective_value::Real
+	homogeneous_primal_objective_value::Real
+	duality_gap::Real
+	
 	dual_feasibility::Real
+	primal_infeasibility::Real
+	primal_feasibility::Real
+	dual_infeasibility::Real
+	
+	summary_norm::Real
 	
 	update_norms::Function
 	compute_residuals::Function
@@ -537,22 +631,48 @@ type class_residuals
 				this.r4 = variables.kappa + pd.grad'*variables.x + pd.b'*variables.y + pd.h'*variables.z;
 				
 				# 5.4 pg 395 homogenous; A homogeneous algorithm for MCP Anderson and Ye
-				this.r1_norm = norm(this.r1,1)/(norm(variables.y,1) + norm(variables.z,1) + variables.tau);
-				this.r2_norm = norm(this.r2,1)/(norm(variables.x,1) + variables.tau);
-				this.r3_norm = norm(this.r3,1)/(norm(variables.s,1) + norm(variables.x,1) + variables.tau);
-				this.r4_norm = norm(this.r4,1)/(variables.kappa + norm(variables.x,1) + norm(variables.z,1));
+				# I added kappa to denominator r1, r2 and r3
+				normalization_factor = 1.0/(variables.tau + variables.kappa)
+				this.r1_norm = normalization_factor*norm(this.r1,1)#/(norm(variables.y,1) + norm(variables.z,1));
+				this.r2_norm = normalization_factor*norm(this.r2,1)#/(norm(variables.x,1));
+				this.r3_norm = normalization_factor*norm(this.r3,1)#/(norm(variables.s,1) + norm(variables.x,1));
+				this.r4_norm = normalization_factor*norm(this.r4,1)#/(norm(variables.x,1) + norm(variables.y,1) + norm(variables.z,1));
 				
-				this.kkt_is_infeasible = variables.tau/variables.kappa;
+				#this.r1_norm = this.r1_norm
+				
+				xNormalized = variables.x/variables.tau
+				yNormalized = variables.y/variables.tau
+				zNormalized = variables.z/variables.tau
+				sNormalized = variables.s/variables.tau
+				
+				this.homogeneous_dual_objective_value = -(pd.b'*yNormalized + pd.h'*zNormalized)[1];
+				this.homogeneous_primal_objective_value = -(pd.grad'*xNormalized)[1];
+				this.duality_gap = (sNormalized'*zNormalized)[1]
+				
+				this.dual_feasibility = norm(this.r1,1)/variables.tau;
+				this.primal_feasibility = norm(this.r2/variables.tau,1) + norm(this.r3/variables.tau,1);
+				
+				this.primal_infeasibility = norm(pd.A'*yNormalized + pd.G'*zNormalized,1)/this.homogeneous_dual_objective_value;
+				this.dual_infeasibility = (norm(pd.A*xNormalized,1) + norm(sNormalized + (pd.G*xNormalized),1))/this.homogeneous_primal_objective_value;
+				
+				#println(this.dual_feasibility)
+				#println(this.primal_feasibility)
+				#println(this.dual_feasibility)
+				#println(scaled_duality_gap2)
+				println("duality gap: " * string(this.duality_gap))
+				println("primal feasibility: " * string(this.primal_feasibility))
+				println("dual feasibility: " * string(this.dual_feasibility))
+				println("primal infeasibility: " * string(this.primal_infeasibility))
+				println("duality infeasibility: " * string(this.dual_infeasibility))
+				println("tau: " * string(variables.tau))
+				println("kappa: " * string(variables.kappa))
+				#println(homogeneous_dual_objective_value)
+				#println(homogeneous_primal_objective_value)
 				
 				this.summary_norm = this.r1_norm + this.r2_norm + this.r3_norm + this.r4_norm;
-				
-				this.primal_feasibility = (pd.b'*variables.y + pd.h'*variables.z)[1];
-				this.dual_feasibility = (pd.grad'*variables.x)[1];
-				
-				#this.primal_feasibility = pd.A
-				#this.dual_feasibility = this.r1_norm/(variables.tau + norm(variables.s,1))
-				#this.relative_gap = grad'*variables.x + pd.b'*variables.y + pd.h'*variables.z				
-				
+			
+				println(this.r1_norm," ",this.r2_norm," ",this.r3_norm," ",this.r4_norm)
+			
 				debug_message("r1")
 				debug_message(this.r1)
 				debug_message("r2")
@@ -561,8 +681,9 @@ type class_residuals
 				debug_message(this.r3)
 				debug_message("r4")
 				debug_message(this.r4)
-			catch (e)
-				println("*** ERROR in compute_residuals")
+				
+			catch e
+				println("*** ERROR in compute_residuals ***")
 				throw(e)
 			end
 		end
@@ -586,7 +707,6 @@ type class_direction
 	
 	compute_alpha::Function
 	compute_min_ratio_alpha::Function
-	line_search_alpha::Function
 	
 	function class_direction(problem_data::class_linear_program_input)
 		this = new();
@@ -700,25 +820,6 @@ type class_direction
 					this.alpha = minimum([this.alpha, candidate_alpha]) 
 				end
 			end
-		end
-		
-		this.line_search_alpha = function(x,problem_data::class_linear_program_input)
-			step_size = this.alpha;
-			
-			best_obj = 999999
-			best_step = nothing;
-			for i = 1:10
-				obj = problem_data.objective_function(x + step_size*this.dx)
-				
-				if obj < best_obj
-					best_obj = obj;
-					best_step = step_size;
-				end
-				
-				step_size = step_size*0.9;
-			end
-			
-			this.alpha = best_step;
 		end
 		
 		return this
