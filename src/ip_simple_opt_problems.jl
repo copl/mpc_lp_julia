@@ -58,7 +58,7 @@ function main()
 		#trival_infeasible1(settings)
 		#trival_infeasible2(settings)
 		#trival_unbounded1(settings)
-		#trival_unbounded2(settings)
+		trival_unbounded2(settings)
 		
 		#lp_feasible_and_bounded_1(settings)
 		#lp_feasible_and_bounded_2(settings)

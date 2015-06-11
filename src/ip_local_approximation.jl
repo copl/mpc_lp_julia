@@ -31,11 +31,12 @@ type class_state
 				this.primal_feasibility = this.r_primal_norm / vars.tau;
 				
 				homogenous_dual_objective = -(local_approx.v3' * [vars.y; vars.y_bar])[1];
-				homogeneous_primal_objective = (local_approx.c' * [vars.x; vars.x_bar])[1];
+				homogeneous_primal_objective = -(local_approx.c' * [vars.x; vars.x_bar])[1];
 				
-				this.dual_infeasibility = norm(local_approx.J * [vars.x; vars.x_bar] + [vars.z; zeros(length(vars.y_bar))], GLOBAL_P_NORM ) / homogeneous_primal_objective;
-				this.primal_infeasibility = norm( (local_approx.J)' * [vars.y; vars.y_bar] + [vars.s; zeros(length(vars.x_bar))], GLOBAL_P_NORM ) / homogenous_dual_objective;
-								
+				this.dual_infeasibility = norm(local_approx.J * [vars.x; vars.x_bar] - [vars.z; zeros(length(vars.y_bar))], GLOBAL_P_NORM ) / homogeneous_primal_objective;
+				this.primal_infeasibility = norm( (local_approx.J)' * [vars.y; vars.y_bar] + [vars.s; zeros(
+				length(vars.x_bar))], GLOBAL_P_NORM ) / homogenous_dual_objective;
+				
 			catch e
 				println("ERROR class_state.update_state")
 				throw (e)
