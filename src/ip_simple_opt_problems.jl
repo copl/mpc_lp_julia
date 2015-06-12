@@ -58,7 +58,7 @@ function main()
 		#trival_infeasible1(settings)
 		#trival_infeasible2(settings)
 		#trival_unbounded1(settings)
-		trival_unbounded2(settings)
+		#trival_unbounded2(settings)
 		
 		#lp_feasible_and_bounded_1(settings)
 		#lp_feasible_and_bounded_2(settings)
@@ -66,9 +66,9 @@ function main()
 		#lp_feasible_and_bounded_4(settings)
 		
 		#qp_feasible_and_bounded_1(settings)
-		qp_infeasible_1(settings)
+		#qp_infeasible_1(settings)
 		#qp_unbounded_1(settings)
-		lp_blend_problem_1(settings)
+		#lp_blend_problem_1(settings)
 		#lp_blend_problem_2(settings)
 		#lp_blend_problem_infeasible_1(settings)
 		#lp_blend_problem_unbounded_1(settings)
@@ -81,6 +81,10 @@ function main()
 		L2_problem(settings, -1.0)
 		L2_problem(settings, -10.0)
 		L2_problem_inequality(settings,-1.0)
+	end
+	
+	if true
+		trival_non_convex_quadratic_problem1(settings)
 	end
 end
 
@@ -689,6 +693,34 @@ end
 ###########################################
 # non-convex objective
 ###########################################
+
+function trival_non_convex_quadratic_problem1(settings)
+	println("trival_problem1")
+	println("min -x^2")
+	println("1 >= x >= 0")
+	
+	A_bar = spzeros(0,1); 
+	
+	A = -sparse(ones(1,1));
+	
+	c = [1.0];
+	
+	b = [-1.0];
+	b_bar = EMPTY_ARRAY;
+	
+	qp = class_non_linear_program();
+	
+	qp.set_quadratic_objective([0.0],sparse([[1.0]]));
+	qp.set_linear_constraints(sparse(A),b,sparse(A_bar),b_bar,1);
+	
+	vars = class_variables(qp);
+	
+	ip_algorithm(qp, settings, vars);
+	
+	# ans
+	# x = [4.0, 0.0, 0.0, 0.0]
+	
+end
 
 ###########################################
 # non-convex constraint

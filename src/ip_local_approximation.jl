@@ -33,8 +33,10 @@ type class_state
 				homogenous_dual_objective = -(local_approx.v3' * [vars.y; vars.y_bar])[1];
 				homogeneous_primal_objective = -(local_approx.c' * [vars.x; vars.x_bar])[1];
 				
+
 				this.dual_infeasibility = norm(local_approx.J * [vars.x; vars.x_bar] - [vars.z; zeros(length(vars.y_bar))], GLOBAL_P_NORM ) / homogeneous_primal_objective;
-				this.primal_infeasibility = norm( (local_approx.J)' * [vars.y; vars.y_bar] + [vars.s; zeros(
+				
+				this.primal_infeasibility = norm(-local_approx.double_c * vars.x_scaled + (local_approx.J)' * [vars.y; vars.y_bar] + [vars.s; zeros(
 				length(vars.x_bar))], GLOBAL_P_NORM ) / homogenous_dual_objective;
 				
 			catch e
@@ -50,6 +52,7 @@ end
 type class_local_approximation
 	# makes a local approximation of constraints and objective at current point
 	
+	make_hessian_convex::Function
 	update_approximation::Function # update the local approximation at the new point
 	calculate_merit_function::Function
 	calculate_merit_function_derivative::Function
@@ -57,6 +60,7 @@ type class_local_approximation
 	gamma::Float64
 	
 	c::Array{Float64,1}
+	double_c::SparseMatrixCSC{Float64,Int64} # objective hessian
 	g::Array{Float64,1}
 	J::SparseMatrixCSC{Float64,Int64}
 	H::SparseMatrixCSC{Float64,Int64}
@@ -82,14 +86,20 @@ type class_local_approximation
 		this = new();
 		this.state = class_state();
 		
+		this.make_hessian_convex = function(H)
+			
+			
+		end
+		
 		this.update_approximation = function(nlp::class_non_linear_program,vars::class_variables,settings::class_settings)
 			try
 				this.current_objective_value = nlp.objective_function(vars.x_scaled);
 				
 				this.c = nlp.objective_function_gradient(vars.x_scaled);
+				this.double_c = nlp.objective_function_hessian(vars.x_scaled)
 				this.J = nlp.evaluate_constraint_gradients(vars.x_scaled);
 				this.g = this.c - this.J'*vars.y_scaled;
-				this.H = nlp.objective_function_hessian(vars.x_scaled) - nlp.evaluate_constraint_lagrangian_hessian(vars.x_scaled,vars.y_scaled);
+				this.H = this.double_c - nlp.evaluate_constraint_lagrangian_hessian(vars.x_scaled,vars.y_scaled);
 			
 				Delta_H = this.H * (vars.x_scaled);
 				
