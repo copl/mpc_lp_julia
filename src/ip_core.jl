@@ -44,6 +44,8 @@ type class_settings
         this = new();
 		
 		this.solution_status = function(state::class_state)
+			# criteron on resiudals ??????
+			
 			# status:
 			# 0 = unknown
 			# 1 = optimal
@@ -54,11 +56,11 @@ type class_settings
 				return 1 # optimal solution found
 			end
 			
-			if 0 <= state.primal_infeasibility && state.primal_infeasibility < this.primal_infeas_tol
+			if state.homogeneous_dual_sign == 1 && state.homogeneous_dual_feasibility < this.primal_infeas_tol
 				return 2 # primal infeasible
 			end
 			
-			if 0 <= state.dual_infeasibility && state.dual_infeasibility < this.dual_infeas_tol
+			if state.homogeneous_primal_sign == 1 && state.homogeneous_primal_feasibility < this.dual_infeas_tol
 				return 3 # dual infeasible
 			end
 			

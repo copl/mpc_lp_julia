@@ -228,13 +228,13 @@ type class_direction
 				if i == settings.max_iter_line_search
 					println("ERROR maximum iterations (", settings.max_iter_line_search ,") for line search exceeded")
 					println("Final alpha value = ", this.alpha)
+					println("Final gain =  ", previous_merit_function_value - merit_function_value)
 					println("Expected gain =  ", -expected_gain)
+					println("Merit function derivative norm = ", norm(merit_function_derivative.dx))
+				
 					
 					@assert(false)
 				end
-				
-				#println("Alpha = ", this.alpha)
-				#println("Merit function decrease = ",previous_merit_function_value - merit_function_value)
 				
 				local_approx.update_approximation(nlp,vars,settings); # restore local approximation
 				return merit_function_value, new_vars, i

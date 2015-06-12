@@ -16,17 +16,15 @@ include("ip_core.jl")
 
 println("loading ip_algorithm")
 
-function ip_algorithm(nlp::class_non_linear_program,	settings::class_settings, variables::class_variables)
+function ip_algorithm(nlp::class_non_linear_program,	settings::class_settings, variables::class_variables, print_output=true)
 	try
-		status = {"primal_feasible"=>None,"dual_feasible"=>None};
-		
 		validate(nlp,variables)
 	
-		println("It | alpha | gamma | tau  | kappa  |  mu  |  gap  | primal | dual | trial#")
-		
+		if print_output
+			println("It | alpha | gamma | tau  | kappa  |  mu  |  gap  | primal | dual | trial#")
+		end
 		
 		# allocate memory for working variables	
-		debug_message_high_level("allocate memory")
 		local_approx = class_local_approximation();
 		direction = class_direction();
 		
@@ -34,30 +32,38 @@ function ip_algorithm(nlp::class_non_linear_program,	settings::class_settings, v
 		number_of_merit_function_evaluations = 0;
 		direction.alpha = 0.0;
 		
-		early_termination = false 
 		for itr = 0:settings.max_iter
 			try				
 				orginal_merit_function_value = local_approx.update_approximation(nlp, variables, settings);
 				
-				print_status(direction, local_approx.state, itr, variables, number_of_merit_function_evaluations, local_approx.gamma) 
-				
-				debug_message_high_level("check termination criterion")
-				
+				if print_output
+					print_status(direction, local_approx.state, itr, variables, number_of_merit_function_evaluations, local_approx.gamma) 
+				end
+								
 				status = settings.solution_status(local_approx.state);
 				
-				if status != 0
-					early_termination = true
-					println("Termination criteron met")
-					settings.print_status(status)
-					break
+				# terminate if we have solved the problem or the maximum iterations are reached
+				if status != 0	
+				
+					if print_output
+						println("Termination criteron met")
+						settings.print_status(status)
+					end
+					
+					return(variables,status, itr)
+					
+				elseif itr == settings.max_iter
+					if print_output
+						println("MAXIMUM ITERATIONS REACHED")
+					end
+					
+					return(variables,status,itr)
+					
 				end
 				
 				direction.update_factorization(local_approx);
 				
-				direction.compute_p_vector(local_approx,variables);
-				
-				debug_message_high_level("predictor")
-				
+				direction.compute_p_vector(local_approx,variables);				
 				
 				# compute predictor
 				local_approx.gamma = 0.0;
@@ -71,24 +77,13 @@ function ip_algorithm(nlp::class_non_linear_program,	settings::class_settings, v
 				direction.compute_direction(local_approx, variables);
 				merit_function_value, variables, number_of_merit_function_evaluations_corrector = direction.step_size_line_search(variables, nlp, local_approx, settings);
 				
-				#println("alpha",direction.alpha)
-				debug_message_high_level("step")
 				# step to next point
 				number_of_merit_function_evaluations = number_of_merit_function_evaluations_predictor + number_of_merit_function_evaluations_corrector
-				#println(number_of_merit_function_evaluations_corrector)
-				#variables.take_step(direction);
 			catch e
 				println("ERROR iteration ", itr)
 				throw(e)
 			end
 		end
-		
-		if ~early_termination
-			println("MAXIMUM ITERATIONS REACHED")
-		end
-		
-		# TO DO RETURN MORE INFORMATION
-		return(variables,status)
 	catch e
 		println("ERROR ip_algorithm")
 		throw(e)

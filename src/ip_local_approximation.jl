@@ -9,9 +9,12 @@ type class_state
 	
 	dual_feasibility::Float64
 	primal_feasibility::Float64
-	dual_infeasibility::Float64
-	primal_infeasibility::Float64
 	
+	
+	homogeneous_primal_sign::Int64
+	homogeneous_dual_sign::Int64
+	homogeneous_primal_feasibility::Float64
+	homogeneous_dual_feasibility::Float64
 	
 	update_state::Function
 	
@@ -30,15 +33,17 @@ type class_state
 				this.dual_feasibility = this.r_dual_norm / vars.tau
 				this.primal_feasibility = this.r_primal_norm / vars.tau;
 				
-				homogenous_dual_objective = -(local_approx.v3' * [vars.y; vars.y_bar])[1];
+				homogeneous_dual_objective = -(local_approx.v3' * [vars.y; vars.y_bar])[1];
 				homogeneous_primal_objective = -(local_approx.c' * [vars.x; vars.x_bar])[1];
 				
-
-				this.dual_infeasibility = norm(local_approx.J * [vars.x; vars.x_bar] - [vars.z; zeros(length(vars.y_bar))], GLOBAL_P_NORM ) / homogeneous_primal_objective;
+				this.homogeneous_primal_sign = sign(homogeneous_primal_objective)
+				this.homogeneous_dual_sign = sign(homogeneous_dual_objective)
 				
-				this.primal_infeasibility = norm(-local_approx.double_c * vars.x_scaled + (local_approx.J)' * [vars.y; vars.y_bar] + [vars.s; zeros(
-				length(vars.x_bar))], GLOBAL_P_NORM ) / homogenous_dual_objective;
+				this.homogeneous_primal_feasibility = norm(local_approx.J * [vars.x; vars.x_bar] - [vars.z; zeros(length(vars.y_bar))], GLOBAL_P_NORM ) / abs(homogeneous_primal_objective);
 				
+				this.homogeneous_dual_feasibility = norm((local_approx.J)' * [vars.y; vars.y_bar] + [vars.s; zeros(
+				length(vars.x_bar))], GLOBAL_P_NORM ) / abs(homogeneous_dual_objective);			
+				#println(this.primal_infeasibility)
 			catch e
 				println("ERROR class_state.update_state")
 				throw (e)
@@ -52,10 +57,15 @@ end
 type class_local_approximation
 	# makes a local approximation of constraints and objective at current point
 	
-	make_hessian_convex::Function
+	# deal with non-convexity
+	diagonally_dominant::Function
+	positive_definite_part::Function # take the +ve part of H
+	
 	update_approximation::Function # update the local approximation at the new point
 	calculate_merit_function::Function
 	calculate_merit_function_derivative::Function
+	calculate_potential_merit_function::Function
+	calculate_potential_merit_function_derivative::Function
 	
 	gamma::Float64
 	
@@ -86,8 +96,8 @@ type class_local_approximation
 		this = new();
 		this.state = class_state();
 		
-		this.make_hessian_convex = function(H)
-			
+		this.diagonally_dominant = function(H)
+			# finds the smallest diagonal that needs to be added to make the matrix diagonally dominant.
 			
 		end
 		
@@ -131,12 +141,6 @@ type class_local_approximation
 		
 		this.calculate_merit_function = function(nlp::class_non_linear_program,vars::class_variables,settings::class_settings)
 			try
-				#theta = 1.0/sqrt(nlp.m_1 + nlp.n_1 + 1);
-				#boundary_distance = sum(log(vars.x)) + sum(log(vars.s)) + sum(log(vars.z)) + sum(log(vars.y)) + sum(log(vars.tau)) + sum(log(vars.kappa))
-				#q = (nlp.m_1 + nlp.n_1 + 1) + sqrt(nlp.m_1 + nlp.n_1 + 1)
-				#potential_function = 2*log(vars.x'*vars.s + vars.z'*vars.y + vars.tau*vars.kappa)[1] - boundary_distance
-				#merit_function_value = -(this.mu)*boundary_distance + log(this.r_dual_norm) + log(this.r_primal_norm) + log(abs(this.r_gap));
-		
 				closest_point = minimum([minimum([vars.x, [Inf]]),minimum([vars.s, [Inf]]),minimum([vars.z, [Inf]]),minimum([vars.y, [Inf]]),vars.tau,vars.kappa])
 					
 				if closest_point < settings.beta2*this.state.mu
@@ -180,6 +184,29 @@ type class_local_approximation
 				println("ERROR class_local_approximation.calculate_merit_function_derivative")
 				throw(e)
 			end
+			
+			this.calculate_potential_merit_function = function(nlp::class_non_linear_program,vars::class_variables,settings::class_settings)
+			try
+				#theta = 1.0/sqrt(nlp.m_1 + nlp.n_1 + 1);
+				#boundary_distance = sum(log(vars.x)) + sum(log(vars.s)) + sum(log(vars.z)) + sum(log(vars.y)) + sum(log(vars.tau)) + sum(log(vars.kappa))
+				#q = (nlp.m_1 + nlp.n_1 + 1) + sqrt(nlp.m_1 + nlp.n_1 + 1)
+				#potential_function = 2*log(vars.x'*vars.s + vars.z'*vars.y + vars.tau*vars.kappa)[1] - boundary_distance
+				#merit_function_value = -(this.mu)*boundary_distance + log(this.r_dual_norm) + log(this.r_primal_norm) + log(abs(this.r_gap));
+		
+				closest_point = minimum([minimum([vars.x, [Inf]]),minimum([vars.s, [Inf]]),minimum([vars.z, [Inf]]),minimum([vars.y, [Inf]]),vars.tau,vars.kappa])
+					
+				if closest_point < settings.beta2*this.state.mu
+					merit_function_value = Inf;
+				else
+					merit_function_value = sqrt(nlp.m_1 + nlp.n_1 + 1)*(this.state.mu) + this.state.r_norm;
+				end
+				
+				return merit_function_value;
+			catch e
+				println("ERROR in class_local_approximation.calculate_merit_function")
+				throw(e)
+			end
+		end
 		end
 		
 		

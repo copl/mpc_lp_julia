@@ -4,18 +4,6 @@
 println("loading libraries")
 
 
-function debug_message(message)
-	#println(message)
-end
-function debug_message_high_level(message)
-	#println(message)
-end
-
-function debug_println(message,shouldPrint)
-	if shouldPrint
-		println(message)
-	end
-end
 #using JuMP
 #using Gurobi
 #using Ipopt
@@ -26,13 +14,15 @@ using MAT
 println("external libraries loaded")
 
 include("ip_algorithm.jl")
+include("testing_tools.jl")
+
 
 println("internal libraries loaded")
 
 function main()
 	settings = class_settings();
 	
-	settings.max_iter = 50;  # Total number of iterarions
+	settings.max_iter = 70;  # Total number of iterarions
 	settings.max_iter_line_search = 50;
 	
 	settings.primal_feas_tol = 1e-8
@@ -48,26 +38,33 @@ function main()
 	settings.beta5 = 0.999
 	settings.beta6 = 0.5
 
+	println("------------------------")
+	println("Start tests")
+	println("------------------------")
+	
 	if true
 	
 		# test problems
-		#trival_problem1(settings)
-		#trival_problem2(settings)
-		#trival_problem3(settings)
+		trival_problem1(settings)
+		trival_problem2(settings)
+		trival_problem3(settings)
 		
-		#trival_infeasible1(settings)
-		#trival_infeasible2(settings)
-		#trival_unbounded1(settings)
-		#trival_unbounded2(settings)
+		trival_infeasible1(settings)
+		trival_infeasible2(settings)
+		trival_unbounded1(settings)
+		trival_unbounded2(settings)
 		
 		#lp_feasible_and_bounded_1(settings)
 		#lp_feasible_and_bounded_2(settings)
 		#lp_feasible_and_bounded_3(settings)
 		#lp_feasible_and_bounded_4(settings)
 		
-		#qp_feasible_and_bounded_1(settings)
-		#qp_infeasible_1(settings)
-		#qp_unbounded_1(settings)
+		qp_feasible_and_bounded_1(settings)
+		qp_feasible_and_bounded_2(settings)
+		qp_infeasible_1(settings)
+		qp_unbounded_1(settings)
+		qp_unbounded_and_infeasible_1(settings)
+		
 		#lp_blend_problem_1(settings)
 		#lp_blend_problem_2(settings)
 		#lp_blend_problem_infeasible_1(settings)
@@ -76,17 +73,18 @@ function main()
 	end
 	
 	if true
-		L2_problem(settings, 1.0)
-		L2_problem(settings, 0.0)
-		L2_problem(settings, -1.0)
-		L2_problem(settings, -10.0)
-		L2_problem_inequality(settings,-1.0)
+		L2_problem(settings, 1.0,1)
+		L2_problem(settings, 0.0,1)
+		L2_problem(settings, -1.0,2)
+		L2_problem(settings, -10.0,2)
+		L2_problem_inequality(settings,-1.0,2)
 	end
 	
 	if true
 		trival_non_convex_quadratic_problem1(settings)
 	end
 end
+
 
 ############################
 # linear programs
@@ -97,10 +95,6 @@ end
 EMPTY_ARRAY = spzeros(0,1)*[0.0]
 
 function trival_problem1(settings)
-	println("trival_problem1")
-	println("min x")
-	println("x >= 0")
-	
 	A_bar = spzeros(0,1); 
 	
 	A = spzeros(0,1);
@@ -116,31 +110,18 @@ function trival_problem1(settings)
 	
 	vars = class_variables(lp);
 	
-	if true
-		vars.x = [2.0];
-		vars.kappa = 5.0;
-		vars.s = [3.0];
-		vars.tau = 4.0;
-		vars.x_scaled = [0.5];
-		vars.y_scaled = [];
-	end
-	
-	ip_algorithm(lp, settings, vars);
-	
-	# ans
-	# x = [4.0, 0.0, 0.0, 0.0]
+	vars, status = ip_algorithm(lp, settings, vars, false);
+	details = "min x" * "\n" * "x >= 0";
+	is_problem_successful("trival_problem1", status, 1, details)
 	
 end
-function trival_problem2(settings)
-	println("trival_problem2")
-	println("min x[1]")
-	println("x[1], x[2] >= 0")
 
+function trival_problem2(settings)
 	A_bar = spzeros(0,2); 
 	
 	A = spzeros(0,2);
 	
-	c = [1, 0.0];
+	c = [1.0, 0.0];
 	
 	b = EMPTY_ARRAY;
 	b_bar = EMPTY_ARRAY;
@@ -151,18 +132,12 @@ function trival_problem2(settings)
 	
 	vars = class_variables(lp);
 	
-	ip_algorithm(lp, settings, vars);
-	
-	# ans
-	# x = [4.0, 0.0, 0.0, 0.0]
-	
+	vars, status = ip_algorithm(lp, settings, vars, false);
+	details = "min x[1]" * "\n" * "x[1], x[2] >= 0";
+	is_problem_successful("trival_problem2", status, 1, details)
 end
 
 function trival_problem3(settings)
-	println("trival_problem3")
-	println("min x[1]")
-	println("eye(2)*x >= 0")
-	
 	A_bar = spzeros(0,2); 
 	
 	A = speye(2);
@@ -178,20 +153,13 @@ function trival_problem3(settings)
 	
 	vars = class_variables(lp);
 	
-	println("trival_problem3")
-	println("min",c,"*x")
-	println(full(A),"*x >=",b)
-	
-	ip_algorithm(lp, settings, vars);
+	vars, status = ip_algorithm(lp, settings, vars, false);
+	details = "min" * string(c) * " *x" * "\n" * string(full(A)) * " * x >= ", string(b);
+	is_problem_successful("trival_problem3", status, 1, details)
 	
 end
 
 function trival_infeasible1(settings)
-	println("trival_infeasible1")
-	println("min x")
-	println("x == -1")
-	println("x >= 0")
-	
 	A_bar = speye(1); 
 	
 	A = spzeros(0,1);
@@ -207,14 +175,12 @@ function trival_infeasible1(settings)
 	
 	vars = class_variables(lp);
 	
-	ip_algorithm(lp, settings, vars);
-	
+	vars, status = ip_algorithm(lp, settings, vars, false);
+	details = "min x" * "\n" * "x == -1" * "\n" * "x >= 0"
+	is_problem_successful("trival_infeasible1", status, 2, details)
 end
 
 function trival_infeasible2(settings)
-	println("trival_infeasible2")
-	println("x <= -1, x >= 0")
-	
 	A_bar = spzeros(0,1); 
 	
 	A = -speye(1);
@@ -229,16 +195,13 @@ function trival_infeasible2(settings)
 	lp.set_linear_constraints(A,b,A_bar,b_bar,1);
 	
 	vars = class_variables(lp);
-	
-	ip_algorithm(lp, settings, vars);
-	
+		
+	vars, status = ip_algorithm(lp, settings, vars, false);
+	details = "min x" * "\n" * "x <= -1" * "\n" * "x >= 0"
+	is_problem_successful("trival_infeasible2", status, 2, details)
 end
 
 function trival_unbounded1(settings)
-	println("trival_unbounded1")
-	println("min -x")
-	println("x >= 0")
-	
 	A_bar = spzeros(0,1); 
 	
 	A = spzeros(0,1);
@@ -254,14 +217,12 @@ function trival_unbounded1(settings)
 	
 	vars = class_variables(lp);
 	
-	ip_algorithm(lp, settings, vars);
+	vars, status = ip_algorithm(lp, settings, vars, false);
+	details = "min -x" * "\n" * "x >= 0"
+	is_problem_successful("trival_unbounded1", status, 3, details)
 end
 
 function trival_unbounded2(settings)
-	println("trival_unbounded2")
-	println("min -x")
-	println("eye(1)*x >= 0")
-	
 	A_bar = spzeros(0,1); 
 	
 	A = speye(1,1);
@@ -277,7 +238,8 @@ function trival_unbounded2(settings)
 	
 	vars = class_variables(lp);
 	
-	ip_algorithm(lp, settings, vars);
+	vars, status = ip_algorithm(lp, settings, vars, false);
+	is_problem_successful("trival_unbounded1", status, 3, None)
 end
 
 function lp_feasible_and_bounded_1(settings)
@@ -523,75 +485,109 @@ end
 
 
 function qp_feasible_and_bounded_1(settings)
-	println("qp_feasible_and_bounded_1")
-	x0 = [1; 1; 1.0];
+	A_bar = speye(0,3); 
+	A = sparse([1.0 1.0 1.0]);
+	b = [1.0];
+	b_bar = EMPTY_ARRAY;
+	
+	c = [0.0, 2.0, 3.0];
+	Q = spdiagm([1.0, 1.0, 1.0])
+	
+	qp = class_non_linear_program() ;
+	qp.set_quadratic_objective(c,Q);
+	qp.set_linear_constraints(A,b,A_bar,b_bar,3); 
+	
+	vars = class_variables(qp);
+	
+	vars, status = ip_algorithm(qp, settings, vars, false);
+		
+	is_problem_successful("qp_feasible_and_bounded_1", status, 1, None)
+end
 
-	A_bar = sparse([1.0 1.0 1.0]); 
+function qp_feasible_and_bounded_2(settings)
+	A_bar = speye(0,3); 
+	A = sparse([1.0 1.0 1.0]);
+	b = [1.0];
+	b_bar = EMPTY_ARRAY;
 	
-	A = speye(0,3);
+	c = [-1.0, 2.0, 3.0];
+	Q = spdiagm([1.0, 1.0, 1.0])
 	
-	c = [1.0, 2.0, 3.0];
-	Q = speye(3)
+	qp = class_non_linear_program() ;
+	qp.set_quadratic_objective(c,Q);
+	qp.set_linear_constraints(A,b,A_bar,b_bar,3); 
 	
-	b = A*x0;
-	b_bar = A_bar*x0;
+	vars = class_variables(qp);
 	
-	lp = class_non_linear_program()  ;
-	lp.set_quadratic_objective(c,Q);
-	lp.set_linear_constraints(A,b,A_bar,b_bar,3); 
-	
-	vars = class_variables(lp);
-	
-	
-	ip_algorithm(lp, settings, vars);
+	vars, status = ip_algorithm(qp, settings, vars, false);
+		
+	is_problem_successful("qp_feasible_and_bounded_2", status, 1, None)
 end
 
 
 function qp_infeasible_1(settings)
-	println("qp_infeasible_1")
-	x0 = [1; 1; 1.0];
-
-	A_bar = sparse([1.0 1.0 1.0]); 
+	A_bar = speye(0,3); 
+	A = -sparse([1.0 1.0 1.0]);
+	b = [1.0];
+	b_bar = EMPTY_ARRAY;
 	
-	A = speye(0,3);
+	c = [-1.0, 2.0, 3.0];
+	Q = spdiagm([1.0, 1.0, 1.0])
 	
-	c = [1, 2, 3.0];
-	Q = speye(3)
+	qp = class_non_linear_program() ;
+	qp.set_quadratic_objective(c,Q);
+	qp.set_linear_constraints(A,b,A_bar,b_bar,3); 
 	
-	b = A*x0;
-	b_bar = [-1.0];
+	vars = class_variables(qp);
 	
-	lp = class_non_linear_program()  ;
-	lp.set_quadratic_objective(c,Q);
-	lp.set_linear_constraints(A,b,A_bar,b_bar,3); 
-	
-	vars = class_variables(lp);
-	
-	
-	ip_algorithm(lp, settings, vars);
+	vars, status = ip_algorithm(qp, settings, vars, false);
+		
+	is_problem_successful("qp_infeasible_1", status, 2, None)
 end
 
 function qp_unbounded_1(settings)
-	println("qp_unbounded_1")
-	x0 = [1; 1; 1.0];
-
-	A_bar = sparse([1.0 1.0 1.0]); 
-	
-	A = speye(0,3);
+	A_bar = speye(0,3); 
+	A = sparse([1.0 1.0 1.0]);
+	b = [1.0];
+	b_bar = EMPTY_ARRAY;
 	
 	c = [-1.0, 2.0, 3.0];
-	Q = speye(3)
+	Q = spdiagm([0.0, 1.0, 1.0])
 	
-	b = A*x0;
-	b_bar = [1.0];
+	qp = class_non_linear_program() ;
+	qp.set_quadratic_objective(c,Q);
+	qp.set_linear_constraints(A,b,A_bar,b_bar,3); 
 	
-	lp = class_non_linear_program()  ;
-	lp.set_quadratic_objective(c,Q);
-	lp.set_linear_constraints(A,b,A_bar,b_bar,3); 
+	vars = class_variables(qp);
 	
-	vars = class_variables(lp);
+	vars, status = ip_algorithm(qp, settings, vars, false);
+		
+	is_problem_successful("qp_unbounded_1", status, 3, None)
+end
+
+function qp_unbounded_and_infeasible_1(settings)
+	A_bar = speye(0,3); 
+	A = -sparse([1.0 1.0 1.0]);
+	b = [1.0];
+	b_bar = EMPTY_ARRAY;
 	
-	ip_algorithm(lp, settings, vars);
+	c = [-1.0, 2.0, 3.0];
+	Q = spdiagm([0.0, 1.0, 1.0])
+	
+	qp = class_non_linear_program() ;
+	qp.set_quadratic_objective(c,Q);
+	qp.set_linear_constraints(A,b,A_bar,b_bar,3); 
+	
+	vars = class_variables(qp);
+	
+	vars, status = ip_algorithm(qp, settings, vars, false);
+	
+	correct_status = 2;
+	if status == 3
+		correct_status = 3; # unbounded is also a valid status
+	end
+	
+	is_problem_successful("qp_unbounded_and_infeasible_1", status, correct_status, None)
 end
 
 
@@ -605,16 +601,10 @@ end
 
 # need to modify line search !!!!
 
-function L2_problem(settings,b)
+function L2_problem(settings, b, correct_status)
 	# min -x[2]
 	# - x[1] -x[2]^2 + b == 0 (x[2]^2 <= b)
 	# x[1], x[2] >= 0
-	println("L2_problem with b = ",b)	
-	println("i.e. min -x[2]")
-	println("s.t. x[1] + x[2]^2 <= ",b)
-	println("x[1],x[2] >= 0")
-	
-	settings.max_iter = 50;
 	
 	nlp = class_non_linear_program();
 	nlp.set_linear_objective([0.0, -1.0]);
@@ -641,24 +631,19 @@ function L2_problem(settings,b)
 	
 	vars = class_variables(nlp);
 	
-	ip_algorithm(nlp, settings, vars);
+	vars, status = ip_algorithm(nlp, settings, vars, false);
+		
+	details = "min -x[2]" * "\n" * "s.t. x[1] + x[2]^2 <= " * string(b) * "\n" * "x[1],x[2] >= 0";
 	
-	println(vars.kappa)
-	println(vars.y_scaled)
+	is_problem_successful("L2_problem with b = " * string(b), status, correct_status, details)
 end
 
 
-function L2_problem_inequality(settings,b)
+function L2_problem_inequality(settings,b,correct_status)
 	# min -x
 	# x^2 <= b
 	# x >= 0
-	println("L2_problem with b = ",b)	
-	println("i.e. min -x")
-	println("s.t. x^2 <= ",b)
-	println("x >= 0")
-	
-	settings.max_iter = 50;
-	
+		
 	nlp = class_non_linear_program();
 	nlp.set_linear_objective([-1.0]);
 	
@@ -684,10 +669,12 @@ function L2_problem_inequality(settings,b)
 	
 	vars = class_variables(nlp);
 	
-	ip_algorithm(nlp, settings, vars);
+	vars, status = ip_algorithm(nlp, settings, vars, false);
+		
+	details = "min -x" * "\n" * "s.t. x^2 <= " * string(b) * "\n" * "x >= 0";
 	
-	println(vars.kappa)
-	println(vars.y_scaled)
+	is_problem_successful("L2_problem with b = " * string(b), status, correct_status, details)
+	
 end
 
 ###########################################
@@ -695,31 +682,28 @@ end
 ###########################################
 
 function trival_non_convex_quadratic_problem1(settings)
-	println("trival_problem1")
-	println("min -x^2")
-	println("1 >= x >= 0")
+	
 	
 	A_bar = spzeros(0,1); 
 	
 	A = -sparse(ones(1,1));
-	
-	c = [1.0];
-	
+		
 	b = [-1.0];
 	b_bar = EMPTY_ARRAY;
 	
 	qp = class_non_linear_program();
 	
-	qp.set_quadratic_objective([0.0],sparse([[1.0]]));
+	qp.set_quadratic_objective([0.0],sparse([[-10*1.0]]));
 	qp.set_linear_constraints(sparse(A),b,sparse(A_bar),b_bar,1);
 	
 	vars = class_variables(qp);
 	
-	ip_algorithm(qp, settings, vars);
+	vars, status = ip_algorithm(qp, settings, vars, false);
 	
-	# ans
-	# x = [4.0, 0.0, 0.0, 0.0]
 	
+	details = "min -10*x^2" * "\n" * "s.t. 1 >= x >= 0";
+	
+	is_problem_successful("trival_non_convex_quadratic_problem1",status,1,details)
 end
 
 ###########################################
