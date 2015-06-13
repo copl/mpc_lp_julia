@@ -98,15 +98,6 @@ function evaluate_mu(nlp,variables,direction)
 end
 
 function print_status(direction, state, itr, variables, number_of_merit_function_evaluations, gamma) 
-	# %%%%%%%%%%%%
-	# %%%%%%%%%%%%
-	# %%%%%%%%%%%%
-	#if local_approx.r_gap >= 0
-	#	gap_sign_string = " "
-	#else
-	#	gap_sign_string = "-"
-	#end
-	
 	@printf("%s %2.1e %2.1e %2.1e %2.1e %2.1e %2.1e %2.1e %2.1e %i\n", rpad(string(itr),3), direction.alpha, gamma, variables.tau, variables.kappa, state.mu, state.r_gap_norm, state.r_primal_norm, state.r_dual_norm, number_of_merit_function_evaluations)
 end
 

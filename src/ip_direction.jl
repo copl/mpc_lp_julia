@@ -209,7 +209,7 @@ type class_direction
 					
 					merit_function_value = minimum([X_l,X_n]); #minimum(X_l,X_n)
 					
-					if merit_function_value < previous_merit_function_value + this.alpha * settings.beta3*expected_gain
+					if true || merit_function_value < previous_merit_function_value + this.alpha * settings.beta3*expected_gain
 						if X_l < X_n && this.is_valid_step(state_w_l, state_vars, settings) 
 							new_vars = w_l;
 							break;

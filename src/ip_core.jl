@@ -52,7 +52,7 @@ type class_settings
 			# 2 = primal infeasible
 			# 3 = dual infeasible
 			
-			if state.mu < this.duality_gap_tol && state.primal_feasibility < this.primal_feas_tol && state.dual_feasibility < this.dual_feas_tol
+			if state.relative_gap < this.duality_gap_tol && state.primal_feasibility < this.primal_feas_tol && state.dual_feasibility < this.dual_feas_tol
 				return 1 # optimal solution found
 			end
 			

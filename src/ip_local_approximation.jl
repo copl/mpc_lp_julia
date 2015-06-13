@@ -1,4 +1,6 @@
 println("loading ip_local_approximation")
+# at each stage we create a quadratic approximation of the current problem we
+# use this to take the netwon step and improve the performance
 
 type class_state
 	r_dual_norm::Float64
@@ -7,6 +9,7 @@ type class_state
 	r_norm::Float64
 	mu::Float64
 	
+	relative_gap::Float64
 	dual_feasibility::Float64
 	primal_feasibility::Float64
 	
@@ -30,8 +33,10 @@ type class_state
 				this.r_norm = norm([ this.r_dual_norm, this.r_primal_norm, this.r_gap_norm ], GLOBAL_P_NORM)
 				this.mu = (vars.x'*vars.s + vars.z'*vars.y + vars.tau*vars.kappa)[1]/(nlp.n_1 + nlp.m_1 + 1);
 				
-				this.dual_feasibility = this.r_dual_norm / vars.tau
-				this.primal_feasibility = this.r_primal_norm / vars.tau;
+				
+				this.relative_gap = this.mu / norm( [vars.x; vars.x_bar; vars.y; vars.y_bar; vars.s; vars.s; vars.tau; vars.kappa], GLOBAL_P_NORM );
+				this.dual_feasibility = this.r_dual_norm /  norm( [vars.y; vars.y_bar; vars.s ], GLOBAL_P_NORM );
+				this.primal_feasibility = this.r_primal_norm / norm( [vars.x; vars.x_bar; vars.z ], GLOBAL_P_NORM );
 				
 				homogeneous_dual_objective = -(local_approx.v3' * [vars.y; vars.y_bar])[1];
 				homogeneous_primal_objective = -(local_approx.c' * [vars.x; vars.x_bar])[1];
