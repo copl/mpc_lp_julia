@@ -1,5 +1,5 @@
-/src		where the code is
+/src/		where the code is
 
-/tests		tests for the code including netlib problems
+/tests/		tests for the code including netlib problems
 
-/docs		relevant papers to the project
+/docs/		relevant papers to the project
