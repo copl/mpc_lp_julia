@@ -77,8 +77,8 @@ type class_direction
 		this.compute_p_vector = function(local_approximation,variables)
 			try
 				this.p = this.factored_K_bar \ [local_approximation.v2; local_approximation.v3];
-				this.p[(length(variables.x_scaled)+1):length(this.p)] = -this.p[(length(variables.x_scaled)+1):length(this.p)]
-				@assert length(this.p) - length(variables.x_scaled) == length(variables.y_scaled)
+				this.p[(length(variables.x_scaled())+1):length(this.p)] = -this.p[(length(variables.x_scaled())+1):length(this.p)]
+				@assert length(this.p) - length(variables.x_scaled()) == length(variables.y_scaled())
 			catch e
 				println("ERROR class_direction.compute_p_vector")
 				throw(e)
@@ -109,7 +109,7 @@ type class_direction
 				q = this.factored_K_bar \ r_hat; # (35)
 				
 				# perform tranformations
-				q[(length(vars.x_scaled)+1):length(q)] = -q[(length(vars.x_scaled)+1):length(q)];
+				q[(length(vars.x_scaled())+1):length(q)] = -q[(length(vars.x_scaled())+1):length(q)];
 				
 				v1_v3 = [local_approximation.v1; -local_approximation.v3];
 				this.dtau = (eta * local_approximation.r_gap + tk/vars.tau - v1_v3' * q)[1]/(local_approximation.D_g - v1_v3' * this.p)[1];
@@ -190,6 +190,12 @@ type class_direction
 				merit_function_derivative = local_approx.calculate_merit_function_derivative( nlp, vars, settings )
 				expected_gain = dot_directions( merit_function_derivative, this );
 				
+				#if expected_gain > 0
+				#	println("ERROR Expected gain is negative!!!")
+				#	println("Expected gain =  ", -expected_gain)
+				#	#@assert(false)
+				#end
+				
 				#println("Expected gain =  ", -expected_gain)
 				
 				merit_function_value = Inf;
@@ -209,7 +215,7 @@ type class_direction
 					
 					merit_function_value = minimum([X_l,X_n]); #minimum(X_l,X_n)
 					
-					if true || merit_function_value < previous_merit_function_value + this.alpha * settings.beta3*expected_gain
+					if merit_function_value < previous_merit_function_value + this.alpha * settings.beta3 *expected_gain
 						if X_l < X_n && this.is_valid_step(state_w_l, state_vars, settings) 
 							new_vars = w_l;
 							break;
@@ -222,18 +228,20 @@ type class_direction
 					end
 					
 					this.alpha = this.alpha*settings.beta4;
-				end
-				
-				
-				if i == settings.max_iter_line_search
-					println("ERROR maximum iterations (", settings.max_iter_line_search ,") for line search exceeded")
-					println("Final alpha value = ", this.alpha)
-					println("Final gain =  ", previous_merit_function_value - merit_function_value)
-					println("Expected gain =  ", -expected_gain)
-					println("Merit function derivative norm = ", norm(merit_function_derivative.dx))
-				
 					
-					@assert(false)
+					if i == settings.max_iter_line_search
+						println("ERROR maximum iterations (", settings.max_iter_line_search ,") for line search exceeded")
+						println("Final alpha value = ", this.alpha)
+						println("Final gain =  ", previous_merit_function_value - merit_function_value)
+						println("Expected gain =  ", -expected_gain*this.alpha)
+						println("Merit function derivative norm = ", norm(merit_function_derivative.dx))
+						
+						#if previous_merit_function_value - merit_function_value > 1e-3 -expected_gain*this.alpha || previous_merit_function_value - merit_function_value < -1e-3 - expected_gain*this.alpha
+						#	println("merit function derivative incorrect!!!")
+						#end
+						
+						@assert(false)
+					end
 				end
 				
 				local_approx.update_approximation(nlp,vars,settings); # restore local approximation

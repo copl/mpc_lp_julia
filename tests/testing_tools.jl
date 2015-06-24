@@ -1,5 +1,6 @@
-EMPTY_ARRAY = spzeros(0,1)*[0.0]
+include("../src/homogeneous_algorithm/ip_algorithm.jl")
 
+EMPTY_ARRAY = spzeros(0,1)*[0.0]
 
 function is_problem_successful(problem_name,status,correct_value,details=None)
 	if status == correct_value
@@ -38,6 +39,8 @@ function standard_settings()
 	settings.beta5 = 0.999
 	settings.beta6 = 0.5
 	
+	settings.diagonal_modification = 1e-8
+	
 	return settings
 end
 
@@ -50,4 +53,44 @@ function get_netlib_problem(file_name)
 	c = c[:];
 	
 	return A,b,c
+end
+
+function solve_with_JuMP(A, b, c, solver=IpoptSolver(max_iter=300)) #Output=0
+	model = Model(solver=solver)
+	
+	n, k = size(A)
+	
+	@defVar(model, x[1:k] >= 0)
+	@setObjective( model, Min, sum{ c[j]*x[j] , j=1:k} )
+
+	for i = 1:n
+		@addConstraint(model, sum{A[i,j]*x[j], j=1:k} == b[i])
+	end
+		
+	status = solve(model)
+	
+	#println("Objective value: ", getObjectiveValue(model))
+	if status == :Optimal
+		return 1
+	elseif status == :Infeasible
+		return 2
+	elseif status == :Unbounded
+		return 3
+	else
+		return 0
+	end
+end
+
+function solve_net_lib_problem(A,b,c,settings)
+	n,k = size(A)
+	
+	lp = class_non_linear_program();
+	lp.set_linear_objective(c);
+	lp.set_linear_constraints(spzeros(0,k),spzeros(0,1)*[1.0],A,b,k);
+	
+	vars = class_variables(lp);
+	
+	vars, status, iter = ip_algorithm(lp, settings, vars, false);
+	
+	return status, iter
 end

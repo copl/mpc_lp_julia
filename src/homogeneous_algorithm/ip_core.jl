@@ -11,7 +11,7 @@ include("ip_direction.jl")
 
 println("loading ip_core")
 
-GLOBAL_P_NORM = 2;
+GLOBAL_P_NORM = 1; #  move to settings !!!
 
 type class_settings
     
@@ -32,6 +32,8 @@ type class_settings
 	beta4::Float64
 	beta5::Float64
 	beta6::Float64
+	
+	diagonal_modification::Float64 # how much do we add to KKT system to make sure it is positive definite
 	
 	solution_status::Function
 	print_status::Function
@@ -87,18 +89,22 @@ type class_settings
     end
 end
 
+#type class_nlp_dimensions
+#
+#end
+
 type class_non_linear_program
 	###########################################################################
 	# user defined 
 	###########################################################################
 	
 	# variable dimensions
-	n_1::Int64 				# number of primal variables with x >= 0
-	n_2::Int64 				# number of unbounded primal variables
+	n_1::Int64 			# number of primal variables with x >= 0
+	n_2::Int64 			# number of unbounded primal variables
 	n::Int64 				# total number of primal variables
 	
-	m_1::Int64 				# number of dual variables y >= 0 (same as the number of inequality constraints)
-	m_2::Int64 				# number of unbounded dual variables
+	m_1::Int64 			# number of dual variables y >= 0 (same as the number of inequality constraints)
+	m_2::Int64 			# number of unbounded dual variables
 	m::Int64				# total number of dual variables
 	
 	# the objective and constraints of the non-linear program
@@ -221,17 +227,20 @@ end
 
 type class_variables 
 	# see page 251
+	#point::Array{Float64,1}
+	
 	x::Array{Float64,1} 		# bounded primal variables
 	x_bar::Array{Float64,1} 	# unbounded primal variables
 	y::Array{Float64,1} 		# dual variables
 	y_bar::Array{Float64,1} 	# unbounded dual variables
 	z::Array{Float64,1} 		# primal slack
 	s::Array{Float64,1} 		# dual slack
-	tau::Float64				# tau (large tau => feasible)
+	tau::Float64					# tau (large tau => feasible)
 	kappa::Float64				# kappa (large kappa => infeasible)
 	
-	x_scaled::Array{Float64,1}
-	y_scaled::Array{Float64,1}
+	x_scaled::Function
+	y_scaled::Function
+	randomize::Function
 	
 	take_step::Function			# 
 	check::Function
@@ -252,9 +261,6 @@ type class_variables
 		this.tau = 1.0;
 		this.kappa = 1.0;
 		
-		this.x_scaled = [this.x; this.x_bar]/this.tau;
-		this.y_scaled = [this.y; this.y_bar]/this.tau;
-		
 		this.take_step = function(direction::class_direction)
 			try
 				alpha = direction.alpha; # get the step size
@@ -268,14 +274,38 @@ type class_variables
 				this.tau = this.tau + alpha * direction.dtau;
 				this.kappa = this.kappa + alpha * direction.dkappa;
 				
-				this.x_scaled = [this.x; this.x_bar]/this.tau;
-				this.y_scaled = [this.y; this.y_bar]/this.tau;
-				
 				this.check()
 			catch e
 				println("error inside class_variables.take_step")
 				throw(e)
 			end
+		end
+		
+		#this.x = function(new_x = None)
+		#	if new_x != None
+		#	
+		#	end
+		#	
+		#	return 
+		#end
+		
+		this.x_scaled = function()
+			return [this.x; this.x_bar]/this.tau;
+		end
+		
+		this.y_scaled = function()
+			return [this.y; this.y_bar]/this.tau;
+		end
+		
+		this.randomize = function()
+			this.x = rand(size(this.x)) + ones(size(this.x));
+			this.x_bar = rand(size(this.x_bar)) - 0.5*ones(size(this.x_bar));
+			this.y = rand(size(this.y)) + ones(size(this.y));
+			this.y_bar = rand(size(this.y_bar)) - 0.5*ones(size(this.y_bar));
+			this.s = rand(size(this.s)) + ones(size(this.s));
+			this.z = rand(size(this.z)) + ones(size(this.z));
+			this.tau = rand() + 1.0;
+			this.kappa = rand() + 1.0;
 		end
 		
 		this.check = function()
@@ -299,8 +329,8 @@ type class_variables
 				@assert(this.tau > 0)
 				@assert(this.kappa > 0)
 				
-				@assert(norm(this.x_scaled - [this.x; this.x_bar]/this.tau,1) < 10^(-8.0));
-				@assert(norm(this.y_scaled - [this.y; this.y_bar]/this.tau,1) < 10^(-8.0));
+				@assert(norm(this.x_scaled() - [this.x; this.x_bar]/this.tau,1) < 10^(-8.0));
+				@assert(norm(this.y_scaled() - [this.y; this.y_bar]/this.tau,1) < 10^(-8.0));
 				
 			catch e
 				println("one variable is less than or equal to zero")
@@ -341,15 +371,15 @@ function validate_dimensions(nlp::class_non_linear_program,vars::class_variables
 		@assert(nlp.m_2 == length(vars.y_bar))
 		@assert(nlp.n == nlp.n_1 + nlp.n_2)
 		@assert(nlp.m == nlp.m_1 + nlp.m_2)
-		@assert(nlp.n == length(vars.x_scaled))
-		@assert(nlp.m == length(vars.y_scaled))
+		@assert(nlp.n == length(vars.x_scaled()))
+		@assert(nlp.m == length(vars.y_scaled()))
 		
 		@assert(nlp.m_1 == length(vars.z))
 		@assert(nlp.n_1 == length(vars.s))
 		
 		
 		try
-			obj = nlp.objective_function(vars.x_scaled);
+			obj = nlp.objective_function(vars.x_scaled());
 			obj::Float64
 		catch e
 			println("ERROR objective_function")
@@ -357,7 +387,7 @@ function validate_dimensions(nlp::class_non_linear_program,vars::class_variables
 		end
 		
 		try
-			c = nlp.objective_function_gradient(vars.x_scaled);
+			c = nlp.objective_function_gradient(vars.x_scaled());
 			c::Array{Float64,1}
 			@assert((nlp.n,) == size(c))
 		catch e
@@ -366,7 +396,7 @@ function validate_dimensions(nlp::class_non_linear_program,vars::class_variables
 		end
 		
 		try
-			H = nlp.objective_function_hessian(vars.x_scaled)
+			H = nlp.objective_function_hessian(vars.x_scaled())
 			H::SparseMatrixCSC{Float64,Int64}
 			@assert((nlp.n,nlp.n) == size(H))
 		catch e
@@ -375,7 +405,7 @@ function validate_dimensions(nlp::class_non_linear_program,vars::class_variables
 		end
 		
 		try
-			a = nlp.evaluate_constraints(vars.x_scaled);
+			a = nlp.evaluate_constraints(vars.x_scaled());
 			a::Array{Float64,1}
 			@assert((nlp.m,) == size(a))
 		catch e
@@ -384,7 +414,7 @@ function validate_dimensions(nlp::class_non_linear_program,vars::class_variables
 		end
 		
 		try
-			J = nlp.evaluate_constraint_gradients(vars.x_scaled);
+			J = nlp.evaluate_constraint_gradients(vars.x_scaled());
 			J::SparseMatrixCSC{Float64,Int64}
 			@assert((nlp.m,nlp.n) == size(J))
 		catch e
@@ -393,7 +423,7 @@ function validate_dimensions(nlp::class_non_linear_program,vars::class_variables
 		end
 		
 		try
-			L = nlp.evaluate_constraint_lagrangian_hessian(vars.x_scaled,vars.y_scaled);
+			L = nlp.evaluate_constraint_lagrangian_hessian(vars.x_scaled(),vars.y_scaled());
 			L::SparseMatrixCSC{Float64,Int64}
 			@assert((nlp.n,nlp.n) == size(L))
 		catch e

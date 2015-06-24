@@ -13,30 +13,12 @@ using MAT
 
 println("external libraries loaded")
 
-include("ip_algorithm.jl")
 include("testing_tools.jl")
-
 
 println("internal libraries loaded")
 
 function main()
-	settings = class_settings();
-	
-	settings.max_iter = 70;  # Total number of iterarions
-	settings.max_iter_line_search = 50;
-	
-	settings.primal_feas_tol = 1e-8
-	settings.dual_feas_tol = 1e-8
-	settings.duality_gap_tol = 1e-10
-	settings.primal_infeas_tol = 1e-8
-	settings.dual_infeas_tol = 1e-8
-	
-	settings.beta1 = 10.0^(-4)
-	settings.beta2 = 10.0^(-8)
-	settings.beta3 = 10.0^(-4)
-	settings.beta4 = 0.9
-	settings.beta5 = 0.999
-	settings.beta6 = 0.5
+	settings = standard_settings()
 
 	println("------------------------")
 	println("Start tests")
@@ -82,6 +64,8 @@ function main()
 	
 	if true
 		trival_non_convex_quadratic_problem1(settings)
+		trival_non_convex_quadratic_problem2(settings)
+		trival_non_convex_quadratic_problem3(settings)
 	end
 end
 
@@ -92,7 +76,6 @@ end
 
 # A = [[1,1],[1,1]]
 
-EMPTY_ARRAY = spzeros(0,1)*[0.0]
 
 function trival_problem1(settings)
 	A_bar = spzeros(0,1); 
@@ -693,7 +676,7 @@ function trival_non_convex_quadratic_problem1(settings)
 	
 	qp = class_non_linear_program();
 	
-	qp.set_quadratic_objective([0.0],sparse([[-10*1.0]]));
+	qp.set_quadratic_objective([1.0],sparse([[-1.0]]));
 	qp.set_linear_constraints(sparse(A),b,sparse(A_bar),b_bar,1);
 	
 	vars = class_variables(qp);
@@ -701,9 +684,59 @@ function trival_non_convex_quadratic_problem1(settings)
 	vars, status = ip_algorithm(qp, settings, vars, false);
 	
 	
-	details = "min -10*x^2" * "\n" * "s.t. 1 >= x >= 0";
+	details = "min x-x^2" * "\n" * "s.t. 1 >= x >= 0";
 	
 	is_problem_successful("trival_non_convex_quadratic_problem1",status,1,details)
+end
+
+function trival_non_convex_quadratic_problem2(settings)
+	
+	
+	A_bar = spzeros(0,1); 
+	
+	A = -sparse(ones(1,1));
+		
+	b = [-1.0];
+	b_bar = EMPTY_ARRAY;
+	
+	qp = class_non_linear_program();
+	
+	qp.set_quadratic_objective([0.0],sparse([[-1.0]]));
+	qp.set_linear_constraints(sparse(A),b,sparse(A_bar),b_bar,1);
+	
+	vars = class_variables(qp);
+	
+	vars, status = ip_algorithm(qp, settings, vars, true);
+	
+	
+	details = "min -x^2" * "\n" * "s.t. 1 >= x >= 0";
+	
+	is_problem_successful("trival_non_convex_quadratic_problem2",status,1,details)
+end
+
+function trival_non_convex_quadratic_problem3(settings)
+	
+	
+	A_bar = spzeros(0,1); 
+	
+	A = -sparse(ones(1,1));
+		
+	b = [-1.0];
+	b_bar = EMPTY_ARRAY;
+	
+	qp = class_non_linear_program();
+	
+	qp.set_quadratic_objective([0.0],sparse([[-10.0]]));
+	qp.set_linear_constraints(sparse(A),b,sparse(A_bar),b_bar,1);
+	
+	vars = class_variables(qp);
+	
+	vars, status = ip_algorithm(qp, settings, vars, true);
+	
+	
+	details = "min -10*x^2" * "\n" * "s.t. 1 >= x >= 0";
+	
+	is_problem_successful("trival_non_convex_quadratic_problem3",status,1,details)
 end
 
 ###########################################

@@ -13,7 +13,6 @@ using Mosek
 
 println("external libraries loaded")
 
-include("ip_algorithm.jl")
 include("testing_tools.jl")
 
 println("internal libraries loaded")
@@ -50,12 +49,10 @@ function main()
 	for problem_name = netlib_problems	
 		A, b, c = get_netlib_problem(dir * "/" * problem_name)
 		
+		ipopt_success = 0;
 		println("Solving ", problem_name)
 		try
-			#ipopt_success = solve_with_JuMP(A, b, c, MosekSolver())
-			#if ipopt_success
-			#	ipopt_successful_problems += 1
-			#end
+			ipopt_success = solve_with_JuMP(A, b, c, MosekSolver(LOG=0))
 		catch e
 			println(e)
 		end
@@ -63,7 +60,7 @@ function main()
 		try
 			status, iter = solve_net_lib_problem(A,b,c,settings)
 			
-			if is_problem_successful(problem_name, status, 1, None)
+			if is_problem_successful(problem_name, status, ipopt_success, None)
 				successful_problems += 1
 				iter_list = [iter_list iter];
 			end
@@ -75,50 +72,6 @@ function main()
 	println("Solved ", successful_problems, " out of ", length(netlib_problems))
 	println("Average iterations ", mean(iter_list))
 	#println("IPOPT solved ", ipopt_successful_problems, " out of ", length(netlib_problems))
-end
-
-function get_netlib_problem(file_name)
-	file = matopen(file_name)
-	A= sparse(read(file, "A"))
-	b = read(file,"b")
-	b = b[:]
-	c = read(file,"c")
-	c = c[:];
-	
-	return A,b,c
-end
-
-function solve_with_JuMP(A, b, c, solver=IpoptSolver(max_iter=300)) #Output=0
-	model = Model(solver=solver)
-	
-	n, k = size(A)
-	
-	@defVar(model, x[1:k] >= 0)
-	@setObjective( model, Min, sum{ c[j]*x[j] , j=1:k} )
-
-	for i = 1:n
-		@addConstraint(model, sum{A[i,j]*x[j], j=1:k} == b[i])
-	end
-		
-	status = solve(model)
-	
-	#println("Objective value: ", getObjectiveValue(model))
-
-	return status == :Optimal
-end
-
-function solve_net_lib_problem(A,b,c,settings)
-	n,k = size(A)
-	
-	lp = class_non_linear_program();
-	lp.set_linear_objective(c);
-	lp.set_linear_constraints(spzeros(0,k),spzeros(0,1)*[1.0],A,b,k);
-	
-	vars = class_variables(lp);
-	
-	vars, status, iter = ip_algorithm(lp, settings, vars, false);
-	
-	return status, iter
 end
 
 main();
