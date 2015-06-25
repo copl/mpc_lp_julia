@@ -16,7 +16,7 @@ GLOBAL_P_NORM = 1; #  move to settings !!!
 type class_settings
     
     max_iter::Int64  
-	max_iter_line_search::Int64
+	min_alpha::Float64
 	
 	duality_gap_tol::Float64
 	primal_feas_tol::Float64
@@ -89,9 +89,62 @@ type class_settings
     end
 end
 
-#type class_nlp_dimensions
-#
-#end
+type class_nlp_dimensions
+	# variable dimensions
+	n_1::Int64 			# number of primal variables with x >= 0
+	n_2::Int64 			# number of unbounded primal variables
+	n::Int64 				# total number of primal variables
+	
+	m_1::Int64 			# number of dual variables y >= 0 (same as the number of inequality constraints)
+	m_2::Int64 			# number of unbounded dual variables
+	m::Int64				# total number of dual variables
+	
+	# indexes of variables
+	x::UnitRange{Int64}
+	x_pos::UnitRange{Int64}
+	x_free::UnitRange{Int64}
+	y::UnitRange{Int64}
+	y_pos::UnitRange{Int64}
+	y_free::UnitRange{Int64}
+	z::UnitRange{Int64}
+	s::UnitRange{Int64}
+	tau::UnitRange{Int64}
+	kappa::UnitRange{Int64}
+	
+	check::Function
+	
+	function class_nlp_dimensions(n_1::Int64,n_2::Int64,m_1::Int64,m_2::Int64)
+		this = new();
+		
+		this.n_1 = n_1;
+		this.m_1, this.n = size(A)
+		this.m_2, this.n = size(A_bar)
+		this.m = this.m_1 + this.m_2
+		this.n_2 = this.n - this.n_1;
+		
+		this.x = n_1;
+		
+		this.check = function()
+			try
+				@assert(this.n_1 <= this.n)
+				@assert(this.n_2 <= this.n)
+				@assert(this.m_1 <= this.m)
+				@assert(this.m_2 <= this.m)
+				
+				@assert(this.m_1 + this.m_2 == this.m)
+				@assert(this.n_1 + this.n_2 == this.n)
+			catch e
+				println("ERROR class_nlp_dimensions.check")
+				throw(e)
+			end
+		end
+		
+		this.dim.check()
+			
+		return this;
+	end
+	
+end
 
 type class_non_linear_program
 	###########################################################################
@@ -238,6 +291,7 @@ type class_variables
 	tau::Float64					# tau (large tau => feasible)
 	kappa::Float64				# kappa (large kappa => infeasible)
 	
+	get_point::Function
 	x_scaled::Function
 	y_scaled::Function
 	randomize::Function
@@ -297,6 +351,10 @@ type class_variables
 			return [this.y; this.y_bar]/this.tau;
 		end
 		
+		this.get_point = function()
+			return [ this.x; this.x_bar; this.x_bar; this.y; this.y_bar; this.s; this.z; this.tau; this.kappa ];
+		end
+		
 		this.randomize = function()
 			this.x = rand(size(this.x)) + ones(size(this.x));
 			this.x_bar = rand(size(this.x_bar)) - 0.5*ones(size(this.x_bar));
@@ -328,10 +386,6 @@ type class_variables
 				
 				@assert(this.tau > 0)
 				@assert(this.kappa > 0)
-				
-				@assert(norm(this.x_scaled() - [this.x; this.x_bar]/this.tau,1) < 10^(-8.0));
-				@assert(norm(this.y_scaled() - [this.y; this.y_bar]/this.tau,1) < 10^(-8.0));
-				
 			catch e
 				println("one variable is less than or equal to zero")
 				throw(e)
@@ -346,7 +400,6 @@ type class_variables
 		return(this)
 	end
 end
-
 
 
 function randomly_generate_variables(nlp)

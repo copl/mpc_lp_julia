@@ -1,3 +1,5 @@
+using JuMP
+
 include("../src/homogeneous_algorithm/ip_algorithm.jl")
 
 EMPTY_ARRAY = spzeros(0,1)*[0.0]
@@ -24,7 +26,7 @@ function standard_settings()
 	settings = class_settings();
 	
 	settings.max_iter = 70;  # Total number of iterarions
-	settings.max_iter_line_search = 40;
+	settings.min_alpha = 1e-3;
 	
 	settings.primal_feas_tol = 1e-8
 	settings.dual_feas_tol = 1e-8
@@ -37,7 +39,7 @@ function standard_settings()
 	settings.beta3 = 10.0^(-4)
 	settings.beta4 = 0.9
 	settings.beta5 = 0.999
-	settings.beta6 = 0.5
+	settings.beta6 = 0.75
 	
 	settings.diagonal_modification = 1e-8
 	
@@ -90,7 +92,7 @@ function solve_net_lib_problem(A,b,c,settings)
 	
 	vars = class_variables(lp);
 	
-	vars, status, iter = ip_algorithm(lp, settings, vars, false);
+	vars, status, iter = ip_algorithm(lp, settings, vars, true);
 	
 	return status, iter
 end

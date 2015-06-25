@@ -66,16 +66,34 @@ function ip_algorithm(nlp::class_non_linear_program,	settings::class_settings, v
 				direction.compute_p_vector(local_approx,variables);				
 				
 				# compute predictor
-				local_approx.gamma = 0.0;
-				direction.compute_direction(local_approx, variables);
-				predictor_merit_function_value, temp, number_of_merit_function_evaluations_predictor = direction.step_size_line_search(variables, nlp, local_approx, settings);
+				predictor_merit_function_value = orginal_merit_function_value;
+				number_of_merit_function_evaluations_predictor = 0;
+				try
+					local_approx.gamma = 0.0;
+					direction.compute_direction(local_approx, variables);
+					predictor_merit_function_value, temp, number_of_merit_function_evaluations_predictor = direction.step_size_line_search(variables, nlp, local_approx, settings);
+				catch e
+					println("ERROR predictor")
+					throw(e)
+				end
 				
 				# compute corrector
-				v = predictor_merit_function_value/orginal_merit_function_value
-				local_approx.gamma = v*min(v, 1.5*settings.beta6); # Mehrotra heuristic, see pg 257					
+				number_of_merit_function_evaluations_corrector = 0;
+				try
+					v = predictor_merit_function_value/orginal_merit_function_value
+					local_approx.gamma = v*min(v, settings.beta6); # Mehrotra heuristic, see pg 257	
+
+					direction.compute_direction(local_approx, variables);
+					@assert(direction.alpha > settings.min_alpha)
+					
+					merit_function_value, variables, number_of_merit_function_evaluations_corrector = direction.step_size_line_search(variables, nlp, local_approx, settings);					
+				catch e
+					println("ERROR corrector")
+					println("Gamma = ", local_approx.gamma)
+					throw(e)
+				end
 				
-				direction.compute_direction(local_approx, variables);
-				merit_function_value, variables, number_of_merit_function_evaluations_corrector = direction.step_size_line_search(variables, nlp, local_approx, settings);
+				
 				
 				# step to next point
 				number_of_merit_function_evaluations = number_of_merit_function_evaluations_predictor + number_of_merit_function_evaluations_corrector

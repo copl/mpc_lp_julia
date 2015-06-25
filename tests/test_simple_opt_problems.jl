@@ -367,7 +367,7 @@ function lp_blend_problem_1(settings)
 		vars = class_variables(lp);
 		
 		ip_algorithm(lp, settings, vars);
-	catch	e
+	catch e
 		println("ERROR in lp_blend_problem_1")
 		throw(e)
 	end
@@ -681,7 +681,7 @@ function trival_non_convex_quadratic_problem1(settings)
 	
 	vars = class_variables(qp);
 	
-	vars, status = ip_algorithm(qp, settings, vars, false);
+	vars, status = ip_algorithm(qp, settings, vars, true);
 	
 	
 	details = "min x-x^2" * "\n" * "s.t. 1 >= x >= 0";

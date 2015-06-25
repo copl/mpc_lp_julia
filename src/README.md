@@ -1,6 +1,6 @@
-/ip_algorithm/    The interior point algorithm for solving non-linear programs.
+/homogeneous_algorithm/    The interior point algorithm for solving non-linear programs.
 
-/model/           Allows the user to build non-linear programs before giving it to the solver.
+/modeling_tools/           Allows the user to build non-linear programs before giving it to the solver.
 
 /presolve/        Reduces the size of optimization problem to improve solver efficiency.
 

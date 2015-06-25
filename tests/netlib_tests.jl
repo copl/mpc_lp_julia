@@ -18,23 +18,7 @@ include("testing_tools.jl")
 println("internal libraries loaded")
 
 function main()
-	settings = class_settings();
-	
-	settings.max_iter = 70;  # Total number of iterarions
-	settings.max_iter_line_search = 70;
-	
-	settings.primal_feas_tol = 1e-10
-	settings.dual_feas_tol = 1e-10
-	settings.duality_gap_tol = 1e-12
-	settings.primal_infeas_tol = 1e-10
-	settings.dual_infeas_tol = 1e-10
-	
-	settings.beta1 = 10.0^(-4)
-	settings.beta2 = 10.0^(-8)
-	settings.beta3 = 10.0^(-4)
-	settings.beta4 = 0.9
-	settings.beta5 = 0.999
-	settings.beta6 = 0.5
+	settings = standard_settings()
 	
 	#run_net_lib_problem("problems/blend.mat", settings)
 	

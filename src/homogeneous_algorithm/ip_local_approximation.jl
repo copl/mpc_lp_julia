@@ -95,6 +95,10 @@ type class_local_approximation
 	calculate_merit_function::Function
 	calculate_merit_function_derivative::Function
 	calculate_residual_norm_derivative::Function
+	finite_difference_merit_function_derivative::Function
+	finite_difference_merit_function_derivative_vector::Function
+	finite_difference_merit_function_derivative_point::Function
+	
 	calculate_potential_merit_function::Function
 	calculate_potential_merit_function_derivative::Function
 	
@@ -131,7 +135,7 @@ type class_local_approximation
 		this.state = class_state();
 		
 		this.convexify_hessian = function(H)
-			return H + 0.5 * spdiagm(diagonally_dominant(H))
+			return H + spdiagm(diagonally_dominant(H)) #+ 1e-8*speye(size(H,1))
 		end
 		
 		this.update_approximation = function(nlp::class_non_linear_program,vars::class_variables,settings::class_settings)
@@ -179,15 +183,7 @@ type class_local_approximation
 		
 		this.calculate_merit_function = function(nlp::class_non_linear_program,vars::class_variables,settings::class_settings)
 			try
-				closest_point = minimum([minimum([vars.x, [Inf]]),minimum([vars.s, [Inf]]),minimum([vars.z, [Inf]]),minimum([vars.y, [Inf]]),vars.tau,vars.kappa])
-					
-				if closest_point < settings.beta2*this.state.mu
-					merit_function_value = Inf;
-				else
-					merit_function_value = sqrt(nlp.m_1 + nlp.n_1 + 1)*(this.state.mu) + this.state.r_norm;
-				end
-				
-				return merit_function_value;
+				return sqrt(nlp.m_1 + nlp.n_1 + 1)*(this.state.mu) + this.state.r_norm;
 			catch e
 				println("ERROR class_local_approximation.calculate_merit_function")
 				throw(e)
@@ -258,6 +254,59 @@ type class_local_approximation
 				throw(e)
 			end
 		end	
+		
+		this.finite_difference_merit_function_derivative = function(nlp::class_non_linear_program, vars::class_variables, settings::class_settings)
+			try
+				merit_derivative = class_direction();
+				orginal_value = this.calculate_merit_function(nlp,vars,settings);
+				
+				h = 1e-6
+				merit_derivative.dx = this.finite_difference_merit_function_derivative_vector(h, nlp, vars, settings, orginal_value, vars.x)
+				merit_derivative.dx_bar = this.finite_difference_merit_function_derivative_vector(h, nlp, vars, settings, orginal_value, vars.x_bar)
+				merit_derivative.dy = this.finite_difference_merit_function_derivative_vector(h, nlp, vars, settings, orginal_value, vars.y)
+				merit_derivative.dy_bar = this.finite_difference_merit_function_derivative_vector(h, nlp, vars, settings, orginal_value, vars.y_bar)
+				merit_derivative.ds = this.finite_difference_merit_function_derivative_vector(h, nlp, vars, settings, orginal_value, vars.s)
+				merit_derivative.dz = this.finite_difference_merit_function_derivative_vector(h, nlp, vars, settings, orginal_value, vars.z)
+				
+				merit_derivative.dtau = this.finite_difference_merit_function_derivative_point(h, nlp, vars, settings, orginal_value, vars.tau)
+				merit_derivative.dkappa = this.finite_difference_merit_function_derivative_point(h, nlp, vars, settings, orginal_value, vars.kappa)
+				
+				return(merit_derivative)
+			catch e
+				println("ERROR class_local_approximation.finite_difference_merit_function_derivative")
+				throw(e)
+			end
+		end
+		
+		this.finite_difference_merit_function_derivative_vector = function(h, nlp, vars, settings, orginal_value, vector)
+			result = zeros(length(vector))
+
+			for i in 1:length(vector)
+				orginal_point = vector[i];
+				vector[i] = orginal_point + h
+				f1 = this.update_approximation(nlp, vars, settings);
+				vector[i] = orginal_point - h
+				f2 = this.update_approximation(nlp, vars, settings);
+				result[i] = (f1 - f2)/(2.0*h)
+				
+				vector[i] = orginal_point
+			end
+				
+			return result
+		end
+		
+		this.finite_difference_merit_function_derivative_point = function(h, nlp, vars, settings, orginal_value, point)
+			point = point + h
+			f1 = this.update_approximation(nlp, vars, settings);
+			point = point - 2.0*h
+			f2 = this.update_approximation(nlp, vars, settings);
+			
+			result = (f1 - f2)/(2.0*h)
+			
+			point = point + h;
+				
+			return result
+		end
 			
 		this.calculate_potential_merit_function = function(nlp::class_non_linear_program,vars::class_variables,settings::class_settings)
 			try

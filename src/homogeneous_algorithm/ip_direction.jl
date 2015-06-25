@@ -16,7 +16,6 @@ type class_direction
 	
 	update_factorization::Function
 	factored_K_bar
-	temp_factor
 	line_search::Function
 	compute_p_vector::Function
 	compute_direction::Function
@@ -45,10 +44,16 @@ type class_direction
 	dtau::Float64
 	dkappa::Float64
 	
+	get_point::Function
+	
 	alpha::Float64
 	
 	function class_direction()
 		this = new();
+		
+		this.get_point = function()
+			return [ this.dx; this.dx_bar; this.dx_bar; this.dy; this.dy_bar; this.ds; this.dz; this.dtau; this.dkappa ];
+		end
 		
 		this.update_factorization = function(local_approximation::class_local_approximation)
 			# function creates the K_bar matrix (37)
@@ -119,7 +124,7 @@ type class_direction
 				k2 = k1 + length(vars.x_bar);
 				k3 = k2 + length(vars.y);
 				k4 = k3 + length(vars.y_bar);
-								
+				
 				this.dx = direction_vector[1:k1];
 				this.dx_bar = direction_vector[(k1+1):k2];
 				this.dy = direction_vector[(k2+1):k3];
@@ -129,6 +134,7 @@ type class_direction
 				this.ds = (xs - (vars.s) .* (this.dx))./(vars.x);
 				this.dz = (zy - (vars.z) .* (this.dy))./(vars.y);
 				this.dkappa = (tk - vars.kappa * this.dtau)/(vars.tau);
+				
 			catch e
 				println("ERROR class_direction.compute_direction")
 				throw(e)
@@ -187,63 +193,73 @@ type class_direction
 				
 				previous_merit_function_value = local_approx.update_approximation(nlp,vars,settings);				
 				state_vars = deepcopy( local_approx.state );
-				merit_function_derivative = local_approx.calculate_merit_function_derivative( nlp, vars, settings )
-				expected_gain = dot_directions( merit_function_derivative, this );
+				#merit_function_derivative = local_approx.calculate_merit_function_derivative( nlp, vars, settings )
+				#merit_function_derivative = local_approx.finite_difference_merit_function_derivative( nlp, vars, settings )
+				#expected_gain = dot_directions( merit_function_derivative, this );
 				
-				#if expected_gain > 0
-				#	println("ERROR Expected gain is negative!!!")
-				#	println("Expected gain =  ", -expected_gain)
-				#	#@assert(false)
-				#end
+				old_alpha = this.alpha;
+				this.alpha = settings.min_alpha;
+				temp_var = deepcopy(vars);
+				temp_var.take_step(this);
+				temp_merit_function = local_approx.update_approximation(nlp,temp_var,settings);
+				expected_gain = (previous_merit_function_value - temp_merit_function)/this.alpha
+				this.alpha = old_alpha
 				
-				#println("Expected gain =  ", -expected_gain)
 				
+				
+				if expected_gain <= 0
+					println("ERROR Expected gain is negative!!!")
+					println("Expected gain =  ", expected_gain)
+					println("r-norm ",(state_vars.r_norm - local_approx.state.r_norm)/settings.min_alpha)
+					
+					@assert(false)
+				end
+								
 				merit_function_value = Inf;
-				new_vars = None;
+				new_vars = deepcopy(vars);
 				this.alpha = this.alpha*settings.beta5;
 				
 				i = 0;
-				for i = 1:(settings.max_iter_line_search)
+				max_it = ceil(log(settings.min_alpha)/log(settings.beta4));
+				for i = 1:max_it
 					w_l = deepcopy(vars);
 					w_l.take_step(this);
 					X_l = local_approx.update_approximation(nlp,w_l,settings);
 					state_w_l = deepcopy(local_approx.state);
+					if ~ this.is_valid_step(w_l, state_w_l, state_vars, settings) 
+						X_l = Inf
+					end
+					
 					
 					w_n = this.compute_alternative_point(w_l,local_approx);
 					X_n = local_approx.update_approximation(nlp,w_n,settings);
 					state_w_n = deepcopy(local_approx.state);
+					if ~ this.is_valid_step(w_n, state_w_n, state_vars, settings) 
+						X_n = Inf
+					end
 					
-					merit_function_value = minimum([X_l,X_n]); #minimum(X_l,X_n)
+					 #minimum([X_l,X_n]); #minimum(X_l,X_n)
 					
-					if merit_function_value < previous_merit_function_value + this.alpha * settings.beta3 *expected_gain
-						if X_l < X_n && this.is_valid_step(state_w_l, state_vars, settings) 
-							new_vars = w_l;
-							break;
-						end
-						
-						if this.is_valid_step(state_w_n, state_vars, settings) 
-							new_vars = w_n;
-							break;
-						end
+					goal = previous_merit_function_value - this.alpha * settings.beta3 * expected_gain;
+					if X_n < goal && X_l < X_n
+						new_vars = w_n;
+						merit_function_value = X_n
+						break;
+					elseif X_l < goal
+						new_vars = w_l;
+						merit_function_value = X_l;
+						break;
+					end
+					
+					if this.alpha < settings.min_alpha
+						merit_function_value = previous_merit_function_value;
+						break
 					end
 					
 					this.alpha = this.alpha*settings.beta4;
 					
-					if i == settings.max_iter_line_search
-						println("ERROR maximum iterations (", settings.max_iter_line_search ,") for line search exceeded")
-						println("Final alpha value = ", this.alpha)
-						println("Final gain =  ", previous_merit_function_value - merit_function_value)
-						println("Expected gain =  ", -expected_gain*this.alpha)
-						println("Merit function derivative norm = ", norm(merit_function_derivative.dx))
-						
-						#if previous_merit_function_value - merit_function_value > 1e-3 -expected_gain*this.alpha || previous_merit_function_value - merit_function_value < -1e-3 - expected_gain*this.alpha
-						#	println("merit function derivative incorrect!!!")
-						#end
-						
-						@assert(false)
-					end
 				end
-				
+								
 				local_approx.update_approximation(nlp,vars,settings); # restore local approximation
 				return merit_function_value, new_vars, i
 			catch e
@@ -266,12 +282,17 @@ type class_direction
 			# mu_change = (vars.x)'*(s_n - vars.s) + (vars.y)'*(z_n - vars.z);			
 		end
 		
-		this.is_valid_step = function(state_w_new::class_state, state_vars::class_state, settings::class_settings)
+		this.is_valid_step = function(vars::class_variables, state_w_new::class_state, state_vars::class_state, settings::class_settings)
 			try
 				if state_w_new.mu / state_vars.mu < settings.beta1 * state_w_new.r_norm / state_vars.r_norm
 					return false
 				end
 				
+				closeness_to_boundary = minimum([minimum([vars.x .* vars.s, [Inf]]),minimum([ vars.z .* vars.y, [Inf]]), vars.tau*vars.kappa])
+					
+				if closeness_to_boundary < settings.beta2 * state_w_new.mu
+					return false;
+				end
 				
 				return true;
 			catch e
