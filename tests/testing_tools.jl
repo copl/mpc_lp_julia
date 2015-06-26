@@ -4,6 +4,7 @@ include("../src/homogeneous_algorithm/ip_algorithm.jl")
 
 EMPTY_ARRAY = spzeros(0,1)*[0.0]
 
+
 function is_problem_successful(problem_name,status,correct_value,details=None)
 	if status == correct_value
 		println(problem_name, " sucessfully solved")

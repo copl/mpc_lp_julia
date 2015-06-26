@@ -59,7 +59,7 @@ type class_state
 				
 				# relative stopping criteron we may want to change this match erling and yinyu.
 				this.relative_gap = this.mu / norm( [vars.x; vars.x_bar; vars.y; vars.y_bar; vars.s; vars.s; vars.tau; vars.kappa], GLOBAL_P_NORM );
-				this.dual_feasibility = this.r_dual_norm /  norm( nlp., GLOBAL_P_NORM );
+				this.dual_feasibility = this.r_dual_norm #/  norm( [vars.y; vars.y_bar; vars.s ], GLOBAL_P_NORM );
 				this.primal_feasibility = this.r_primal_norm / norm( [vars.x; vars.x_bar; vars.z ], GLOBAL_P_NORM );
 				
 				homogeneous_dual_objective = -(local_approx.v3' * [vars.y; vars.y_bar])[1];
@@ -319,9 +319,9 @@ type class_local_approximation
 				
 					
 				
-				merit_function_value = sqrt(nlp.m_1 + nlp.n_1 + 1)*(this.state.mu) + this.state.r_norm;
+				#merit_function_value = sqrt(nlp.m_1 + nlp.n_1 + 1)*(this.state.mu) + this.state.r_norm;
 				
-				return merit_function_value;
+				#return merit_function_value;
 			catch e
 				println("ERROR in class_local_approximation.calculate_merit_function")
 				throw(e)

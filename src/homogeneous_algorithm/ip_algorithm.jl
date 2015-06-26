@@ -50,14 +50,14 @@ function ip_algorithm(nlp::class_non_linear_program,	settings::class_settings, v
 						settings.print_status(status)
 					end
 					
-					return(variables,status, itr)
+					return(variables, status, itr)
 					
 				elseif itr == settings.max_iter
 					if print_output
 						println("MAXIMUM ITERATIONS REACHED")
 					end
 					
-					return(variables,status,itr)
+					return(variables, status,itr)
 					
 				end
 				
