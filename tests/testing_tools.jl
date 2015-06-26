@@ -26,7 +26,7 @@ function standard_settings()
 	settings = class_settings();
 	
 	settings.max_iter = 70;  # Total number of iterarions
-	settings.min_alpha = 1e-3;
+	settings.min_alpha = 1e-4;
 	
 	settings.primal_feas_tol = 1e-8
 	settings.dual_feas_tol = 1e-8
@@ -92,7 +92,7 @@ function solve_net_lib_problem(A,b,c,settings)
 	
 	vars = class_variables(lp);
 	
-	vars, status, iter = ip_algorithm(lp, settings, vars, true);
+	vars, status, iter = ip_algorithm(lp, settings, vars, false);
 	
 	return status, iter
 end

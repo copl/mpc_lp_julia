@@ -98,7 +98,7 @@ function ip_algorithm(nlp::class_non_linear_program,	settings::class_settings, v
 				# step to next point
 				number_of_merit_function_evaluations = number_of_merit_function_evaluations_predictor + number_of_merit_function_evaluations_corrector
 			catch e
-				println("ERROR iteration ", itr)
+				println("ERROR iteration ", itr + 1)
 				throw(e)
 			end
 		end

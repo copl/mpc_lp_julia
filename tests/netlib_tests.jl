@@ -1,3 +1,7 @@
+#
+# give the option of adding hessian matricies to netlib problems
+# 
+#
 
 println("loading libraries")
 

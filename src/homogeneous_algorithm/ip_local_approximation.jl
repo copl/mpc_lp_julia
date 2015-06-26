@@ -135,7 +135,7 @@ type class_local_approximation
 		this.state = class_state();
 		
 		this.convexify_hessian = function(H)
-			return H + spdiagm(diagonally_dominant(H)) #+ 1e-8*speye(size(H,1))
+			return H + 1.1*spdiagm(diagonally_dominant(H)) #+ 1e-6*speye(size(H,1))
 		end
 		
 		this.update_approximation = function(nlp::class_non_linear_program,vars::class_variables,settings::class_settings)
