@@ -1,6 +1,7 @@
 #
 # give the option of adding hessian matricies to netlib problems
 # 
+# fix stopping criteron so all netlib problems converge
 #
 
 println("loading libraries")
