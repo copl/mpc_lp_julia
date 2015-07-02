@@ -3,14 +3,24 @@ using JuMP
 using MAT
 
 
-function check(A,b,c)
+function check()
   include("testing_tools.jl")
   println("loaded libraries")
-  A,b,c = get_netlib_problem("small_problems/ADLITTLE.mat")
+
+
+  A,b,c = get_netlib_problem("small_problems/AFIRO.mat")
   # min c'*x
   # A x = b
   # x >= 0
 
+  f = open("values.txt", "w")
+  #=for i = 1:size(A,2)
+    writecsv(f, A[:,i])
+    write(f, "\n")
+  end=#
+  writecsv(f,A)
+  writecsv(f,c)
+  close(f)
   S1 = LPsolve(A,b,c)
   S2 = trivialcheck(A,b,c)
   if isequal(S1,S2) == false
@@ -21,6 +31,7 @@ function check(A,b,c)
   else
     return true
   end
+
 end
 function checks(A,b,c)
   #all checks go here
@@ -38,40 +49,46 @@ function LPsolve(A,b,c)
   end
   @setObjective(m, Min, sum{c[i]*x[i], i = 1:size(A,2)})
 
-  #print(m)
+  print(m)
   status = solve(m)
   println("Status: ", status)
   println("Objective value: ", getObjectiveValue(m))
-  for i = 1:size(A,2)
-   # println(getValue(x[i]))
-  end
   toc()
   return getObjectiveValue(m)
 end
-function check(A,b,c,r,S)
+function check(A,b,c,S)
 
   m = Model()
-  if size(A,2) == 0
+  for j = 1:size(A,2)
+    cnt = 0
+    for i = 1:size(A,1)
+      if A[i,j] != 0
+        cnt += 1
+      end
+    end
+    println(j, " ", cnt, " ", c[j])
+  end
+  if size(A,1) == 0 || size(A,2) == 0
     return S
   end
+
   @defVar(m, x[1:size(A,2)] >= 0)
 
 
   for i = 1:size(A,1)
     @addConstraint(m, sum{A[i,j]*x[j], j = 1:size(A,2)} == b[i])
   end
+
   @setObjective(m, Min, S + sum{c[i]*x[i], i = 1:size(A,2)})
 
-  #print(m)
+  print(m)
   status = solve(m)
   println("Status: ", status)
   println("Objective value: ", getObjectiveValue(m))
-  for i = 1:size(A,2)
-    #println(getValue(x[i]))
-  end
+
   return getObjectiveValue(m)
 end
-function trivialcheck(A, b, c) #if 0 or 1 values in row/column
+function trivialcheck(A, b, c, l, u) #if 0 or 1 values in row/column
 
   tic()
   row = falses(size(A,1))
@@ -79,20 +96,21 @@ function trivialcheck(A, b, c) #if 0 or 1 values in row/column
   A1 = Array(Float64, size(A,1), size(A,2))
   b1 = Array(Float64, size(A,1))
   c1 = Array(Float64, size(c))
-  x = fill(NaN, size(c))
   S = 0
 
   convert(Float64, A[1,1])
   convert(Float64, b[1])
   convert(Float64, c[1])
-  convert(Float64, x[1])
 
   for i = 1:size(A,2)
     c1[i] = c[i]
   end
+
   for i = 1:size(A,1)
     b1[i] = b[i]
-
+    for j = 1:size(A,2)
+      A1[i,j] = A[i,j]
+    end
   end
 
   for i = 1:size(A,1)
@@ -117,58 +135,64 @@ function trivialcheck(A, b, c) #if 0 or 1 values in row/column
   	elseif cnt == 1 #row singleton
   		row[i] = true
       col[k] = true
-      x[k] = b[i]/A[i,k]
-      S += c[k]*x[k]
-      c1[k] = 0
+      x = b[i]/A[i,k]
+      S += c[k]*x
+      #c1[k] = 0
+      #A1[i,k] = 0
 		  #substitute into other equations
   		for j = 1:size(A,1)
 	  		if j != i
-		  		b1[j] -= x[k]*A[j,k]
+		  		b1[j] -= x*A[j,k]
 			  end
 		  end
 	  end
   end
 
 
-
   for i = 1:size(A,2)
-
-		  cnt = 0
-		  k = 0 #marker
-		  for j = 1:size(A,1)
-			  if A[j,i] != 0
-			  	cnt += 1
-			  	if k == 0
-			  		k = j
-				  end
-		  	end
-	  	end
-	  	if cnt == 0
-	 		  col[i] = true #remove column, still need to check conditions (min/max, coefficient sign on c[i])
+    if col[i] == false
+      cnt = 0
+      k = 0 #marker
+      for j = 1:size(A,1)
+        if A[j,i] != 0
+          cnt += 1
+          if k == 0
+            k = j
+          end
+        end
+      end
+      if cnt == 0 #empty column
+        col[i] = true
         if c[i] >= 0
-          x[i] = 0
+          c[i] = 0 #equivalent to x[i] = 0
         else
-          println("infeasible")
-			    return 2
+          println("unbounded")
+          return 3
         end
-	  	elseif cnt == 1 #column singleton - substitution
-		  	#=b1[j] = b[j]*A[j,k]
-		  	for j = 1:size(A,2)
-			  	if j != k
-			    	A1[i,j] = A[i,j]*(A[i,k]-1)
-			    	c1[j] = c[j] - A[i,j]*c[k]/A[i,k]
+      elseif cnt == 1 #column singleton - substitution
 
-		  		end
-	  		end=#
         row[k] = true
+        col[i] = true
         for j = 1:size(A,2)
-          c1[j] -= c[i]*A[k,j]/A[k,i] #check
+          if col[j] == false
+            c1[j] -= c[i]*A[k,j]/A[k,i] #check
+          end
         end
-        c1[i] = 0
-	  	end
+        S += c[i]*b[k]/A[k,i]
+      end
+    end
   end
 
-
+ #= for i = 1:size(A,1)
+    if row[i] == true
+      println(i)
+    end
+  end
+  for i = 1:size(A,2)
+    if col[i] == true
+      println(i)
+    end
+  end=#
 
   n = size(A,1)-1
 
@@ -193,7 +217,7 @@ function trivialcheck(A, b, c) #if 0 or 1 values in row/column
     end
   end
 
-    n = size(A,2)-1
+  n = size(A,2)-1
 
   while n > 1
     if col[n] == true
@@ -202,39 +226,46 @@ function trivialcheck(A, b, c) #if 0 or 1 values in row/column
     end
     n -= 1
   end
-  if size(c1,2) == 0
+
+  if size(c1) == 0
     return S
-  elseif size(c1,2) != 1
+  elseif size(c1) != 1
     if col[end] == true
       A1 = A1[:,1:end-1]
       c1 = c1[1:end-1]
     end
-    if row[1] == true
-      A1 = A1[2:end,:]
+    if col[1] == true
+      A1 = A1[:,2:end]
       c1 = c1[2:end]
     end
   end
 
- #= println("The new matrix A:")
+  println("The new matrix A:")
 	println(A1)
   println("Matrix B:")
   println(b1)
   println("Matrix C:")
   println(c1)
 
-  println("x values:")
-  println(x) =#
   print("Old size: ")
   print(size(A,1), size(A,2))
   print("New size: ")
   print(size(A1,1), size(A1,2))
+  for j = 1:size(A,2)
+    cnt = 0
+    for i = 1:size(A,1)
+      if A[i,j] != 0
+        cnt += 1
+      end
+    end
+      println(j, " ", cnt, " ", col[j])
 
-  r = size(A,1) - size(A1,1)
-  sol = check(A1,b1,c1,r,S)
+  end
+  sol = check(A1,b1,c1,S)
   toc()
   return sol
 end
-#=
+
 function rowcheck(A, b)
 row = falses(size(b))
 
@@ -358,10 +389,9 @@ for i = 1:k
 end
 
 end
-=#
 
-#=
 function subset(A, b, c, n)
+x = zeros(size(A,2))
 
 for i = 1:size(A,1)
 	cnt = 0
@@ -372,18 +402,19 @@ for i = 1:size(A,1)
 	end
 	if cnt <= n
 		for j = 1:size(A,1)
-			b = true
+			B = true
 			if j != i
 				for k = 1:size(A,2)
-					if A[i,k] != 0 &&  A[j,k] != A[i,k]
-						b = false
+					if A[i,k] != 0 && A[j,k] == 0
+						B = false
 					end
 				end
 			end
-			if b == true
+			if B == true
 				for k = 1:size(A,2)
-					if A[i,k] != 0 #optimize?
-
+					if A[i,k] != 0
+            x[k] = A[j,k]/A[i,k] #optimize?
+          end
 				end
 			end
 		end
@@ -392,4 +423,4 @@ for i = 1:size(A,1)
 end
 
 
-end=#
+end
