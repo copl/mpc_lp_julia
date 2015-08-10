@@ -25,49 +25,11 @@ function main()
 	println("------------------------")
 	
 	if true
-	
-		# test problems
-		#trival_problem1(settings)
-		trival_problem2(settings)
-		trival_problem3(settings)
-		
-		#trival_infeasible1(settings)
-		#trival_infeasible2(settings)
-		trival_unbounded1(settings)
-		trival_unbounded2(settings)
-		
-		#lp_feasible_and_bounded_1(settings)
-		#lp_feasible_and_bounded_2(settings)
-		#lp_feasible_and_bounded_3(settings)
-		#lp_feasible_and_bounded_4(settings)
-		
-		qp_feasible_and_bounded_1(settings)
-		qp_feasible_and_bounded_2(settings)
-		qp_infeasible_1(settings)
-		qp_unbounded_1(settings)
-		qp_unbounded_and_infeasible_1(settings)
-		
-		#lp_blend_problem_1(settings)
-		#lp_blend_problem_2(settings)
-		#lp_blend_problem_infeasible_1(settings)
-		#lp_blend_problem_unbounded_1(settings)
-		#qp_blend_problem_1(settings)
+		non_convex_test(settings,[1.0,-10.0],[[1.0 1.0]],[1.0],1)		
+		non_convex_test(settings,[1.0,-10.0],[[1.0 1.0]],[-1.0],2)
+		non_convex_test(settings,[1.0,-10.0],[[1.0 -1.0]],[0.0],3)
 	end
 	
-	if false
-		L2_problem(settings, 1.0,1)
-		L2_problem(settings, 0.0,1)
-		L2_problem(settings, -1.0,2)
-		L2_problem(settings, -10.0,2)
-		L2_problem_inequality(settings,-1.0,2)
-	end
-	
-	if true
-		trival_non_convex_quadratic_problem1(settings)
-		trival_non_convex_quadratic_problem2(settings)
-		trival_non_convex_quadratic_problem3(settings)
-		trival_non_convex_quadratic_problem4(settings)
-	end
 end
 
 
@@ -76,6 +38,33 @@ end
 ############################
 
 # A = [[1,1],[1,1]]
+
+
+# min -x^2 - 10*y^2
+# x, y >= 0
+# A*[x,y] = b
+function non_convex_test(settings,quad,A_bar,b_bar,correct_status)
+	try
+		A = spzeros(0,2);
+		b = EMPTY_ARRAY;
+	
+		qp = class_non_linear_program();
+	
+		qp.set_quadratic_objective([0.0, 0.0],spdiagm(quad));
+		qp.set_linear_constraints(sparse(A),b,sparse(A_bar),b_bar,2);
+	
+		vars = class_variables(qp);
+	
+		vars, status = ip_algorithm(qp, settings, vars, true);
+
+		details = "min -x^2 - y^2" * "\n" * "s.t. x,y >= 0";
+	
+		is_problem_successful("non_convex_quadratic_problem",status,correct_status,details)
+		println(vars.x_scaled())
+	catch e
+		println (e)
+	end
+end
 
 
 function trival_problem1(settings)
@@ -138,7 +127,7 @@ function trival_problem3(settings)
 	vars = class_variables(lp);
 	
 	vars, status = ip_algorithm(lp, settings, vars, false);
-	details = "min" * string(c) * " *x" * "\n" * string(full(A)) * " * x >= ", string(b);
+	details = "min" * string(c) * " * x" * "\n" * string(full(A)) * " * x >= ", string(b);
 	is_problem_successful("trival_problem3", status, 1, details)
 	
 end

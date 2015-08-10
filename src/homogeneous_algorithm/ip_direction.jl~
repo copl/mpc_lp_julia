@@ -302,7 +302,7 @@ type class_direction
 			this.compute_maximum_step_size_vector( vars.z, this.dz );
 			this.compute_maximum_step_size_variable( vars.tau, this.dtau );
 			this.compute_maximum_step_size_variable( vars.kappa, this.dkappa );
-			this.alpha = this.alpha*settings.beta5;
+			#this.alpha = this.alpha*settings.bkscale;
 		end
 		
 		this.compute_maximum_step_size_vector = function(var::Array{Float64,1}, dvar::Array{Float64,1})

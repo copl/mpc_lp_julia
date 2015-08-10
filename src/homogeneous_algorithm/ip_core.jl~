@@ -410,6 +410,7 @@ type class_variables
 				@assert(~isnan(this.kappa))
 				@assert(this.kappa > 0)
 			catch e
+				println(this.x)
 				println("one variable is less than or equal to zero")
 				throw(e)
 			end

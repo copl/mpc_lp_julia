@@ -31,8 +31,8 @@ function main()
 		trival_problem2(settings)
 		trival_problem3(settings)
 		
-		#trival_infeasible1(settings)
-		#trival_infeasible2(settings)
+		trival_infeasible1(settings)
+		trival_infeasible2(settings)
 		trival_unbounded1(settings)
 		trival_unbounded2(settings)
 		

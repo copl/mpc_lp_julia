@@ -172,13 +172,13 @@ type class_local_approximation
 
 				# In (30)
 				this.a  = nlp.evaluate_constraints(vars.x_scaled());
-				this.v1 = -this.c - this.H * (vars.x_scaled()); # ERROR IN YINYU ANDERSON 1
-				this.v2 = this.c - this.H * (vars.x_scaled());# + 2*mod*vars.x_scaled(); # ERROR IN YINYU ANDERSON 1
+				this.v1 = -this.c - this.convex_H * (vars.x_scaled()); # ERROR IN YINYU ANDERSON 1
+				this.v2 = this.c - this.convex_H * (vars.x_scaled());# + 2*mod*vars.x_scaled(); # ERROR IN YINYU ANDERSON 1
 				this.v3 = this.a - this.J * (vars.x_scaled());
 
 				# following (31)
 				# 1e-8*ones are added incase the constraints are not linearly independent
-				this.D_g = (vars.x_scaled()' * this.H * vars.x_scaled())[1] + vars.kappa/vars.tau;
+				this.D_g = (vars.x_scaled()' * this.convex_H * vars.x_scaled())[1] + vars.kappa/vars.tau;
 
 				#this.D_g = max(this.D_g,10)
 

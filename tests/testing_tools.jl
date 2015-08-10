@@ -26,14 +26,16 @@ end
 function standard_settings()
 	settings = class_settings();
 	
-	settings.max_iter = 70;  # Total number of iterarions
-	settings.min_alpha = 1e-4;
+	settings.max_iter = 200;  # Total number of iterarions
+	settings.min_alpha = 1e-6;
 	
-	settings.primal_feas_tol = 1e-8
-	settings.dual_feas_tol = 1e-8
-	settings.duality_gap_tol = 1e-10
-	settings.primal_infeas_tol = 1e-8
-	settings.dual_infeas_tol = 1e-8
+	settings.kkt_feasible = 10e-5
+
+	settings.primal_feas_tol = 1e-6
+	settings.dual_feas_tol = 1e-6
+	settings.duality_gap_tol = 1e-5
+	settings.primal_infeas_tol = 1e-6
+	settings.dual_infeas_tol = 1e-6
 	
 	settings.beta1 = 10.0^(-4)
 	settings.beta2 = 10.0^(-8)
@@ -41,8 +43,10 @@ function standard_settings()
 	settings.beta4 = 0.9
 	settings.beta5 = 0.999
 	settings.beta6 = 0.75
+
+	settings.non_convex_mode = false
 	
-	settings.diagonal_modification = 1e-8
+	settings.diagonal_modification = 1e-10
 	
 	return settings
 end
@@ -64,7 +68,7 @@ function solve_with_JuMP(A, b, c, solver=IpoptSolver(max_iter=300)) #Output=0
 	n, k = size(A)
 	
 	@defVar(model, x[1:k] >= 0)
-	@setObjective( model, Min, sum{ c[j]*x[j] , j=1:k} )
+	@setObjective( model, Min, sum{ c[j]*x[j] - 0.5*1e-4*x[j]*x[j], j=1:k} )
 
 	
 	@defConstrRef constr[1:n]
@@ -76,14 +80,16 @@ function solve_with_JuMP(A, b, c, solver=IpoptSolver(max_iter=300)) #Output=0
 	
 	#println("Objective value: ", getObjectiveValue(model))
 	
+	
+
 	if status == :Optimal
-		return 1, getValue(x)[:], getDual(constr)[:]
+		return 1 #, getValue(x)[:], getDual(constr)[:]
 	elseif status == :Infeasible
 		return 2
 	elseif status == :Unbounded
 		return 3
 	else
-		return 0
+		return 0 #, getValue(x)[:] #, getDual(constr)[:]
 	end
 end
 
@@ -91,12 +97,12 @@ function solve_net_lib_problem(A,b,c,settings)
 	n,k = size(A)
 	
 	lp = class_non_linear_program();
-	lp.set_linear_objective(c);
+	lp.set_quadratic_objective(c,-1e-4*speye(length(c)));
 	lp.set_linear_constraints(spzeros(0,k),spzeros(0,1)*[1.0],A,b,k);
 	
 	vars = class_variables(lp);
 	
-	vars, status, iter = ip_algorithm(lp, settings, vars, false);
+	vars, status, iter = ip_algorithm(lp, settings, vars, true);
 	
 	return status, iter
 end

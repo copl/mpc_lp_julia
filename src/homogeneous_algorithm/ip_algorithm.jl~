@@ -94,7 +94,7 @@ function ip_algorithm(nlp::class_non_linear_program,	settings::class_settings, v
 					number_of_merit_function_evaluations_corrector = 0;
 					try
 						v = predictor_merit_function_value/orginal_merit_function_value
-						local_approx.gamma = 0.85 #v*min(v, settings.beta6); # Mehrotra heuristic, see pg 257	
+						local_approx.gamma = 0.9 #v*min(v, settings.beta6); # Mehrotra heuristic, see pg 257	
 
 						direction.compute_direction(local_approx, variables);
 						direction.compute_maximum_step_size(variables, settings)
