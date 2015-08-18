@@ -27,7 +27,7 @@ function main()
 	
 	#run_net_lib_problem("problems/blend.mat", settings)
 	
-	dir = "small_problems";
+	dir = "tiny_problems";
 	netlib_problems = readdir(dir)
 	
 	successful_problems = 0

@@ -25,10 +25,12 @@ function main()
 	println("------------------------")
 	
 	if true
+		#trivial_non_convex_test(settings,[-9.0],3)
 		non_convex_test(settings,[1.0,-10.0],[[1.0 1.0]],[1.0],1)		
 		non_convex_test(settings,[1.0,-10.0],[[1.0 1.0]],[-1.0],2)
-		non_convex_test(settings,[1.0,-10.0],[[1.0 -1.0]],[0.0],3)
+		#non_convex_test(settings,[1.0,-10.0],[[1.0 -1.0]],[0.0],3)
 	end
+	
 	
 end
 
@@ -43,6 +45,30 @@ end
 # min -x^2 - 10*y^2
 # x, y >= 0
 # A*[x,y] = b
+
+function trivial_non_convex_test(settings,quad,correct_status)
+	try
+		A = spzeros(0,1);
+		b = EMPTY_ARRAY;
+	
+		qp = class_non_linear_program();
+	
+		qp.set_quadratic_objective([0.0],spdiagm(quad));
+		qp.set_linear_constraints(sparse(A),b,sparse(A),b,1);
+	
+		vars = class_variables(qp);
+	
+		vars, status = ip_algorithm(qp, settings, vars, true);
+
+		details = "min -x^2" * "\n" * "s.t. x >= 0";
+	
+		is_problem_successful("trivial_non_convex_quadratic_problem",status,correct_status,details)
+		println(vars.x_scaled())
+	catch e
+		println (e)
+	end
+end
+
 function non_convex_test(settings,quad,A_bar,b_bar,correct_status)
 	try
 		A = spzeros(0,2);

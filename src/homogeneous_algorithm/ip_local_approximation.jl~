@@ -63,8 +63,8 @@ type class_state
 				# relative stopping criteron we may want to change this match erling and yinyu.
 				this.relative_gap = this.mu/(vars.tau + vars.kappa) # / norm( [vars.x; vars.x_bar; vars.y; vars.y_bar; vars.s; vars.s; vars.tau; vars.kappa], GLOBAL_P_NORM );
 				this.dual_feasibility = this.r_dual_norm/vars.tau #/  norm( [vars.y; vars.y_bar; vars.s ], GLOBAL_P_NORM );
-				this.primal_feasibility = this.r_primal_norm/vars.tau #/ norm( [vars.x; vars.x_bar; vars.z ], GLOBAL_P_NORM );
-				
+				this.primal_feasibility = norm(local_approx.a, GLOBAL_P_NORM) #/ norm( [vars.x; vars.x_bar; vars.z ], GLOBAL_P_NORM );
+
 				homogeneous_dual_objective = -(local_approx.v3' * [vars.y; vars.y_bar])[1];
 				homogeneous_primal_objective = -(local_approx.c' * [vars.x; vars.x_bar])[1];
 				
@@ -94,8 +94,11 @@ type class_local_approximation
 	reset_hessian_modifications::Function
 	
 	update_approximation::Function # update the local approximation at the new point
-	
+
+	theta::Function	
 	calculate_merit_function::Function
+	calculate_merit_function_expected_progress::Function
+
 	calculate_merit_function_derivative::Function
 	calculate_residual_norm_derivative::Function
 	finite_difference_merit_function_derivative::Function
@@ -107,9 +110,8 @@ type class_local_approximation
 	
 	gamma::Float64 # predictor-corrector parameter
 	sigma::Float64 # parameters that ensures hessian is positive-definite
-	lambda::Float64 # parameters that ensures hessian is positive-definite
 	
-	update_lambda::Function
+
 
 	c::Array{Float64,1}
 	#double_c::SparseMatrixCSC{Float64,Int64} # objective hessian
@@ -139,13 +141,7 @@ type class_local_approximation
 		this = new();
 		this.gamma = 1.0;
 		this.state = class_state();
-		this.sigma = 1.0
-		this.lambda = 0.0
 		
-		this.update_lambda = function()
-			this.lambda = 1.0 #max(-eigmin(full(this.H)),0.0) + 11.0
-			#this.lambda = 1.0;
-		end
 		
 		this.update_approximation = function(nlp::class_non_linear_program,vars::class_variables,settings::class_settings)
 			try
@@ -157,13 +153,13 @@ type class_local_approximation
 				this.g = this.c - this.J'*vars.y_scaled();
 				#this.H = this.double_c - nlp.evaluate_constraint_lagrangian_hessian(vars.x_scaled(),vars.y_scaled())
 				this.H = nlp.objective_function_hessian(vars.x_scaled()) - nlp.evaluate_constraint_lagrangian_hessian(vars.x_scaled(),vars.y_scaled())
-				this.update_lambda()	
+				#this.update_lambda()	
 				
 				(n,m) = size(this.H)
 				@assert(n == m)			
 				
-				mod = this.lambda * this.sigma * speye(size(this.H,1));
-				this.convex_H = this.H + mod
+
+				#this.convex_H = this.H #+ this.sigma * speye(size(this.H,1));
 				#this.H = this.convex_H
 				#this.H = this.convex_H
 				#println(full(this.H))
@@ -172,17 +168,17 @@ type class_local_approximation
 
 				# In (30)
 				this.a  = nlp.evaluate_constraints(vars.x_scaled());
-				this.v1 = -this.c - this.convex_H * (vars.x_scaled()); # ERROR IN YINYU ANDERSON 1
-				this.v2 = this.c - this.convex_H * (vars.x_scaled());# + 2*mod*vars.x_scaled(); # ERROR IN YINYU ANDERSON 1
+				this.v1 = -this.c - this.H * (vars.x_scaled()); # ERROR IN YINYU ANDERSON 1
+				this.v2 = this.c - this.H * (vars.x_scaled());# + 2*mod*vars.x_scaled(); # ERROR IN YINYU ANDERSON 1
 				this.v3 = this.a - this.J * (vars.x_scaled());
 
 				# following (31)
 				# 1e-8*ones are added incase the constraints are not linearly independent
-				this.D_g = (vars.x_scaled()' * this.convex_H * vars.x_scaled())[1] + vars.kappa/vars.tau;
+				this.D_g = (vars.x_scaled()' * this.H * vars.x_scaled())[1] + vars.kappa/vars.tau;
 
 				#this.D_g = max(this.D_g,10)
 
-				this.D_x = this.convex_H + spdiagm([(vars.s)./(vars.x); zeros(length(vars.x_bar))] + settings.diagonal_modification*ones(length(vars.x_scaled())));
+				this.D_x = this.H + spdiagm([(vars.s)./(vars.x); zeros(length(vars.x_bar))] + settings.diagonal_modification*ones(length(vars.x_scaled())));
 				this.D_z = spdiagm(  [(vars.z)./(vars.y); zeros(length(vars.y_bar))]  + settings.diagonal_modification*ones(length(vars.y_scaled())) );
 				
 
@@ -190,9 +186,9 @@ type class_local_approximation
 				this.r_dual = ([vars.s; zeros(length(vars.x_bar))] - vars.tau*(this.g));
 				this.r_gap = (vars.kappa + vars.tau*((vars.x_scaled()'*this.g) + (vars.y_scaled()'*this.a)))[1];
 				this.r_primal = ([vars.z; zeros(length(vars.y_bar))] - vars.tau*this.a);
-				
+
 				this.state.update_state(this,vars,nlp)
-				
+
 				return this.calculate_merit_function(nlp,vars,settings);
 			catch e
 				println("ERROR in class_local_approximation.update_approximation")
@@ -200,15 +196,35 @@ type class_local_approximation
 			end
 		end
 		
+		this.theta = function(nlp::class_non_linear_program)
+			return sqrt(nlp.m_1 + nlp.n_1 + 1.0)
+		end
+
 		this.calculate_merit_function = function(nlp::class_non_linear_program,vars::class_variables,settings::class_settings)
 			try
-				return sqrt(nlp.m_1 + nlp.n_1 + 1)*(this.state.mu) + this.state.r_norm;
+				return this.theta(nlp)*(this.state.mu) + this.state.r_norm;
 			catch e
 				println("ERROR class_local_approximation.calculate_merit_function")
 				throw(e)
 			end
 		end
+
+		this.calculate_merit_function_expected_progress = function(nlp::class_non_linear_program)
+			return ( 1.0 - this.gamma ) * ( this.theta(nlp) * this.state.mu + this.state.r_norm )
+		end
 		
+		this.calculate_merit_function_expected_progress_finite_difference = function(nlp::class_non_linear_program,vars,dir)
+			old_alpha = dir.alpha;
+			dir.alpha = settings.min_alpha;
+			temp_var = deepcopy(vars);
+			temp_var.take_step(dir);
+			temp_merit_function = local_approx.update_approximation(nlp,temp_var,settings);
+			expected_gain_est = (previous_merit_function_value - temp_merit_function)/this.alpha
+			dir.alpha = old_alpha
+
+			return expected_gain_est
+		end
+
 		this.calculate_merit_function_derivative = function(nlp::class_non_linear_program,vars::class_variables,settings::class_settings)
 			try
 				# compute the derivative of the residual norm

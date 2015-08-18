@@ -27,7 +27,7 @@ function main()
 	
 	#run_net_lib_problem("problems/blend.mat", settings)
 	
-	dir = "small_problems";
+	dir = "temp";
 	netlib_problems = readdir(dir)
 	
 	successful_problems = 0
@@ -41,7 +41,7 @@ function main()
 		ipopt_success = 0;
 		println("Solving ", problem_name)
 		try
-			ipopt_success = solve_with_JuMP(A, b, c, MosekSolver(LOG=0)) #
+			ipopt_success = solve_with_JuMP(A, b, c) # , MosekSolver(LOG=0)
 		catch e
 			println(e)
 		end

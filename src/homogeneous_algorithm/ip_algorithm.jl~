@@ -32,6 +32,7 @@ function ip_algorithm(nlp::class_non_linear_program,	settings::class_settings, v
 		number_of_merit_function_evaluations = 0;
 		direction.alpha = 0.0;
 		
+		omega = 1e-8
 
 		for itr = 0:settings.max_iter
 			try	
@@ -64,13 +65,16 @@ function ip_algorithm(nlp::class_non_linear_program,	settings::class_settings, v
 					
 				end
 				
+
 				direction.update_factorization(local_approx,nlp,variables,settings)
-				local_approx.sigma = direction.factored_K_bar.calc_min_mod() + 0.0;				
-				local_approx.update_approximation(nlp, variables, settings);
-				
-				
+				sigma = direction.factored_K_bar.calc_min_mod()*3 #+ 100*local_approx.state.mu/variables.tau
+
+				nlp_convex = nlp.convexify(sigma, variables.x_scaled()) ##################################
+				local_approx.update_approximation(nlp_convex, variables, settings);
+				#println("Omega = ",omega)				
+
 				if direction.update_factorization(local_approx,nlp,variables,settings) || ~settings.non_convex_mode
-					println("is inertia correct: ",direction.factored_K_bar.is_convex)
+					#println("is inertia correct: ",direction.factored_K_bar.is_convex)
 
 					direction.compute_p_vector(local_approx,variables);				
 				
@@ -78,32 +82,51 @@ function ip_algorithm(nlp::class_non_linear_program,	settings::class_settings, v
 					predictor_merit_function_value = orginal_merit_function_value;
 					number_of_merit_function_evaluations_predictor = 0;
 
-					if false					
+					orginal_mu = local_approx.state.mu
 					try
-						local_approx.gamma = 1.0;
+						local_approx.gamma = 0.0;
 						direction.compute_direction(local_approx, variables);
-						predictor_merit_function_value, temp, number_of_merit_function_evaluations_predictor = direction.step_size_line_search(variables, nlp, local_approx, settings);
+						direction.compute_maximum_step_size(variables, settings)
+						#@assert(direction.alpha > settings.min_alpha)
+						predictor_merit_function_value, temp, number_of_merit_function_evaluations_predictor = direction.step_size_line_search(variables, nlp_convex, local_approx, settings);
+						
+						
 					catch e
+						#println(full(direction.K_bar))
+						#println("x-scaled",variables.x_scaled())	
+						#println("x/s",(variables.s)./variables.x)
+						#println("x",(variables.x))
+						#println("dx",direction.dx)					
 						println("ERROR predictor")
 						println(e)
 						println("===============")
 						#throw(e)
 					end
-					end
+
 					# compute corrector
 					number_of_merit_function_evaluations_corrector = 0;
+					step_alpha = NaN;
 					try
-						v = predictor_merit_function_value/orginal_merit_function_value
-						local_approx.gamma = 0.9 #v*min(v, settings.beta6); # Mehrotra heuristic, see pg 257	
+						#new_mu = local_approx.state.mu
+						#v = new_mu/orginal_mu
+						v = predictor_merit_function_value/orginal_merit_function_value;
+						
+						local_approx.gamma = min(1.0,v)*min(v, settings.beta6); # Mehrotra heuristic, see pg 257	
 
 						direction.compute_direction(local_approx, variables);
 						direction.compute_maximum_step_size(variables, settings)
-						#@assert(direction.alpha > settings.min_alpha)
-					
-						variables.take_step(direction)
-						#merit_function_value, variables, number_of_merit_function_evaluations_corrector = direction.step_size_line_search(variables, nlp, local_approx, settings);					
+						step_alpha = direction.alpha
+						@assert(direction.alpha > 10*settings.min_alpha)
+										
+						#variables.take_step(direction)
+						#direction.alpha = 0.9*direction.alpha						
+						merit_function_value, variables, number_of_merit_function_evaluations_corrector = direction.step_size_line_search(variables, nlp_convex, local_approx, settings);
+						#variables.take_step(direction);
+						@assert(direction.alpha > settings.min_alpha)				
 					catch e
 						println("ERROR corrector")
+						println("step Alpha = ", step_alpha)							
+						println("Alpha = ", direction.alpha)						
 						println("Gamma = ", local_approx.gamma)
 						throw(e)
 					end
@@ -113,9 +136,11 @@ function ip_algorithm(nlp::class_non_linear_program,	settings::class_settings, v
 					# step to next point
 					number_of_merit_function_evaluations = number_of_merit_function_evaluations_predictor + number_of_merit_function_evaluations_corrector
 				end
+				#omega = max(omega/((direction.alpha/0.3)^2),1e-10)
+				@assert(omega < 1e10)
 			catch e
 				println("ERROR iteration ", itr + 1)
-				println(variables.x_scaled(),variables.y_scaled())
+				#println(variables.x_scaled(),variables.y_scaled())
 				throw(e)
 			end
 		end

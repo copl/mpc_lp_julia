@@ -23,10 +23,6 @@ type matlab_ldl
 
 		this.factorize = function()#sigma::Float64 = 0.0)
 			try 
-				num_vars = num_vars + 0.0;
-				num_constraints = num_constraints + 0.0;
-				@mput num_vars num_constraints
-	
 				@matlab begin
 					mat_L, mat_D, mat_P, mat_S = ldl(sparse_matrix);
 					diag_vec = diag(mat_D);
@@ -34,7 +30,6 @@ type matlab_ldl
 
 				@mget diag_vec
 				this.diag_vec = full(diag_vec)[:]
-				this.is_convex = calc_is_convex(this.diag_vec);
 			catch e
 				println("ERROR matlab_ldl.refactorize")
 				throw(e)
@@ -61,35 +56,10 @@ type matlab_ldl
 			end
 		end
 
-		function calc_is_convex(my_diag_vec::Array{Float64,1})
-			pos_eigs = 0;
-			zero_eigs = 0;
-			neg_eigs = 0;
-			for i in 1:length(my_diag_vec)
-				val = my_diag_vec[i]
-				if val > 0.0
-					pos_eigs = pos_eigs + 1
-				elseif val < 0.0
-					neg_eigs = neg_eigs + 1
-				else
-					zero_eigs = zero_eigs + 1
-				end
-			end
-			
-			
-			if pos_eigs == num_vars && neg_eigs == num_constraints
-				return true
-			else
-				#println("actual: ", pos_eigs, " ", neg_eigs,  " ", zero_eigs)
-				#println("target: ", num_vars, " ", num_constraints, " ", 0)
-				#@assert(pos_eigs == num_vars && neg_eigs == num_constraints)				
-				return false
-				
-			end
-		end
-
 		this.calc_min_mod = function()
-			eval_string("for sigma = linspace(0.0,5.0,40)
+			mval = 5.0;
+			@mput mval 
+			eval_string("for sigma = [0, 10.^(linspace(-5,mval,100))]
 					sigma;
 					[mat_L, mat_D, mat_P, mat_S] = ldl(sparse_matrix + sigma*sparse(diag([ones(num_vars,1); zeros(num_constraints,1)])));
 					diag_vec = diag(mat_D);
@@ -100,11 +70,21 @@ type matlab_ldl
 					end 
 				     end")
 			@mget sigma
+			if (sigma == 10^mval)
+				@mget pos_eigs neg_eigs
+				println("target:",num_vars, " ", num_constraints)
+				println("actual",pos_eigs, " ", neg_eigs)
+				@assert(sigma != 10^mval)
+			end
 			println("sigma for convexity = ",sigma)
 			return sigma
 		end
 		
 		try
+			num_vars = num_vars + 0.0;
+			num_constraints = num_constraints + 0.0;
+			@mput num_vars num_constraints
+
 	   		n = num_constraints + num_vars;
 			@assert(size(sparse_matrix) == (n,n));
 			@mput sparse_matrix;
@@ -124,6 +104,7 @@ type class_direction
 	# it handles the linear algebra i.e. solves a KKT system to find the search direction
 	
 	update_factorization::Function
+	K_bar	
 	factored_K_bar::matlab_ldl
 	line_search::Function
 	compute_p_vector::Function
@@ -174,7 +155,7 @@ type class_direction
 			# otherwise returns false
 			
 			try
-				K_bar = sparse(
+				this.K_bar = sparse(
 						[[local_approx.D_x local_approx.J']
 						[local_approx.J -local_approx.D_z]]
 					);
@@ -183,23 +164,12 @@ type class_direction
 				#this.factored_K_bar = lufact(K_bar);
 				n = size(local_approx.D_x,1);
 				m = size(local_approx.D_z,1);
-				this.factored_K_bar = matlab_ldl(K_bar,n,m)
+				this.factored_K_bar = matlab_ldl(this.K_bar,n,m);
 				
 
 				#println("sigma: ", local_approx.sigma, " mod: ", local_approx.sigma*local_approx.lambda)
 
-				if this.factored_K_bar.is_convex
-					local_approx.sigma = local_approx.sigma * 0.9;
-					
-					return true
-				else
-					
-					local_approx.sigma = min(local_approx.sigma * 1.2, 2.1);
-					
-					return false
-					#this.update_factorization(local_approx,nlp,vars,settings)					
-					#this.factored_K_bar.refactorize(local_approximation.sigma);
-				end
+				return true
 			catch e
 				println("ERROR class_direction.update_factorization")
 				throw(e)
@@ -302,7 +272,7 @@ type class_direction
 			this.compute_maximum_step_size_vector( vars.z, this.dz );
 			this.compute_maximum_step_size_variable( vars.tau, this.dtau );
 			this.compute_maximum_step_size_variable( vars.kappa, this.dkappa );
-			#this.alpha = this.alpha*settings.bkscale;
+			this.alpha = this.alpha*settings.beta5;
 		end
 		
 		this.compute_maximum_step_size_vector = function(var::Array{Float64,1}, dvar::Array{Float64,1})
@@ -331,19 +301,8 @@ type class_direction
 				
 				previous_merit_function_value = local_approx.update_approximation(nlp,vars,settings);				
 				state_vars = deepcopy( local_approx.state );
-				#merit_function_derivative = local_approx.calculate_merit_function_derivative( nlp, vars, settings )
-				#merit_function_derivative = local_approx.finite_difference_merit_function_derivative( nlp, vars, settings )
-				#expected_gain = dot_directions( merit_function_derivative, this );
 				
-				old_alpha = this.alpha;
-				this.alpha = settings.min_alpha;
-				temp_var = deepcopy(vars);
-				temp_var.take_step(this);
-				temp_merit_function = local_approx.update_approximation(nlp,temp_var,settings);
-				expected_gain = (previous_merit_function_value - temp_merit_function)/this.alpha
-				this.alpha = old_alpha
-				
-				
+				expected_gain = local_approx.calculate_merit_function_expected_progress(nlp);
 				
 				if expected_gain <= 0
 					println("ERROR Expected gain is negative!!!")
