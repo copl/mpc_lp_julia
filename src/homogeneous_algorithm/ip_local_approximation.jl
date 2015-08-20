@@ -198,12 +198,12 @@ type class_local_approximation
 		end
 		
 		this.theta = function(nlp::class_non_linear_program)
-			return sqrt(nlp.m_1 + nlp.n_1 + 1.0)
+			return 1.0/sqrt(nlp.m_1 + nlp.n_1 + 1.0)
 		end
 
 		this.calculate_merit_function = function(nlp::class_non_linear_program,vars::class_variables,settings::class_settings)
 			try
-				return this.theta(nlp)*(this.state.mu) + this.state.r_norm;
+				return (this.theta(nlp)*(this.state.mu) + this.state.r_norm)#/(vars.tau + vars.kappa);
 			catch e
 				println("ERROR class_local_approximation.calculate_merit_function")
 				throw(e)
@@ -211,19 +211,25 @@ type class_local_approximation
 		end
 
 		this.calculate_merit_function_expected_progress = function(nlp::class_non_linear_program)
-			return ( 1.0 - this.gamma ) * ( this.theta(nlp) * this.state.mu + this.state.r_norm )
+			return ( 1.0 - this.gamma ) * ( this.theta(nlp) * this.state.mu + this.state.r_norm ) #/(vars.tau + vars.kappa)
 		end
 		
-		this.calculate_merit_function_expected_progress_finite_difference = function(nlp::class_non_linear_program,vars,dir)
-			old_alpha = dir.alpha;
-			dir.alpha = settings.min_alpha;
-			temp_var = deepcopy(vars);
-			temp_var.take_step(dir);
-			temp_merit_function = local_approx.update_approximation(nlp,temp_var,settings);
-			expected_gain_est = (previous_merit_function_value - temp_merit_function)/this.alpha
-			dir.alpha = old_alpha
+		this.calculate_merit_function_expected_progress_finite_difference = function(nlp::class_non_linear_program,vars::class_variables,dir::class_direction,settings::class_settings)
+			try
+				previous_merit_function_value = this.update_approximation(nlp,vars,settings);			
+				old_alpha = dir.alpha;
+				dir.alpha = 1e-5;
+				temp_var = deepcopy(vars);
+				temp_var.take_step(dir);
+				temp_merit_function = this.update_approximation(nlp,temp_var,settings);
+				expected_gain_est = (previous_merit_function_value - temp_merit_function)/dir.alpha
+				dir.alpha = old_alpha
 
-			return expected_gain_est
+				return expected_gain_est
+			catch e
+				println("ERROR class_local_approximation.calculate_merit_function_expected_progress_finite_difference")
+				throw(e)
+			end
 		end
 
 		this.calculate_merit_function_derivative = function(nlp::class_non_linear_program,vars::class_variables,settings::class_settings)
@@ -247,6 +253,7 @@ type class_local_approximation
 				println("ERROR class_local_approximation.calculate_merit_function_derivative")
 				throw(e)
 			end
+			
 		end
 		
 		this.calculate_residual_norm_derivative = function(nlp::class_non_linear_program,vars::class_variables,settings::class_settings)

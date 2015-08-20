@@ -293,21 +293,21 @@ type class_non_linear_program
 			end
 		end
 
-		this.convexify = function(sigma::Float64, cur_point::Array{Float64,1})
+		this.convexify = function(delta::Float64, cur_point::Array{Float64,1})
 			nlp_convex = deepcopy(this)
-			D = speye(length(cur_point))# + spdiagm(1./cur_point.^2)
+			D = speye(length(cur_point))# + *spdiagm(1./cur_point.^2)
 
 			nlp_convex.objective_function = function(x_scaled)
 				d = x_scaled-cur_point;
-				return this.objective_function(x_scaled) + 0.5*sigma*norm(d,2)^2 #(d'*D*d)[1]
+				return this.objective_function(x_scaled) + 0.5*delta*norm(d,2)^2 #(d'*D*d)[1]
 			end
 
 			nlp_convex.objective_function_gradient = function(x_scaled)
-				return this.objective_function_gradient(x_scaled) + sigma*D*(x_scaled-cur_point)
+				return this.objective_function_gradient(x_scaled) + delta*D*(x_scaled-cur_point)
 			end
 			
 			nlp_convex.objective_function_hessian = function(x_scaled)
-				return this.objective_function_hessian(x_scaled) + sigma*D
+				return this.objective_function_hessian(x_scaled) + delta*D
 			end
 			
 			return(nlp_convex)

@@ -16,7 +16,7 @@ type matlab_ldl
 	solve::Function
 	factorize::Function
 	calc_min_mod::Function
-	is_convex::Bool
+	calc_is_convex::Function
 
 	function matlab_ldl(sparse_matrix::SparseMatrixCSC{Float64,Int64}, num_vars::Int64, num_constraints::Int64)
 		this = new();
@@ -33,6 +33,17 @@ type matlab_ldl
 			catch e
 				println("ERROR matlab_ldl.refactorize")
 				throw(e)
+			end
+		end
+
+		this.calc_is_convex = function()
+			pos_eigs = sum(this.diag_vec .> 0.0);
+			neg_eigs = sum(this.diag_vec .< 0.0);
+
+			if pos_eigs == num_vars && neg_eigs == num_constraints
+				return true
+			else
+				return false
 			end
 		end
 
@@ -169,7 +180,7 @@ type class_direction
 
 				#println("sigma: ", local_approx.sigma, " mod: ", local_approx.sigma*local_approx.lambda)
 
-				return true
+				return this.factored_K_bar.calc_is_convex()
 			catch e
 				println("ERROR class_direction.update_factorization")
 				throw(e)
@@ -298,65 +309,77 @@ type class_direction
 				# - make sure x-values match
 								
 				# compute the alpha that minimizes (or maximizes) the merit function				
-				
+				#println(0)
 				previous_merit_function_value = local_approx.update_approximation(nlp,vars,settings);				
 				state_vars = deepcopy( local_approx.state );
+
+				#println(1)
+				#expected_gain = local_approx.calculate_merit_function_expected_progress(nlp);
+				expected_gain = local_approx.calculate_merit_function_expected_progress_finite_difference(nlp,vars,this,settings);
+
+				#println(2)
+				merit_function_value = Inf;
+				new_vars = deepcopy(vars);
 				
-				expected_gain = local_approx.calculate_merit_function_expected_progress(nlp);
-				
+				i = 0;
 				if expected_gain <= 0
 					println("ERROR Expected gain is negative!!!")
 					println("Expected gain =  ", expected_gain)
 					println("r-norm ",(state_vars.r_norm - local_approx.state.r_norm)/settings.min_alpha)
 					
-					@assert(false)
-				end
-								
-				merit_function_value = Inf;
-				new_vars = deepcopy(vars);
-				this.alpha = this.alpha*settings.beta5;
-				
-				i = 0;
-				max_it = ceil(log(settings.min_alpha)/log(settings.beta4));
-				for i = 1:max_it
-					w_l = deepcopy(vars);
-					w_l.take_step(this);
-					X_l = local_approx.update_approximation(nlp,w_l,settings);
-					state_w_l = deepcopy(local_approx.state);
-					if ~ this.is_valid_step(w_l, state_w_l, state_vars, settings) 
-						X_l = Inf
+					this.alpha = 0.0;
+				else			
+					
+					this.alpha = this.alpha*settings.beta5;
+					
+					max_it = ceil(log(settings.min_alpha/this.alpha)/log(settings.beta4));
+					for i = 1:max_it
+						w_l = deepcopy(vars);
+						w_l.take_step(this);
+						X_l = local_approx.update_approximation(nlp,w_l,settings);
+						state_w_l = deepcopy(local_approx.state);
+						if ~ this.is_valid_step(w_l, state_w_l, state_vars, settings) 
+							X_l = Inf
+						end
+					
+					
+						w_n = this.compute_alternative_point(w_l,local_approx);
+						X_n = local_approx.update_approximation(nlp,w_n,settings);
+						state_w_n = deepcopy(local_approx.state);
+						if ~ this.is_valid_step(w_n, state_w_n, state_vars, settings) 
+							X_n = Inf
+						end
+					
+						 #minimum([X_l,X_n]); #minimum(X_l,X_n)
+					
+						goal = previous_merit_function_value - this.alpha * settings.beta3 * expected_gain;
+						if X_n < goal && X_l < X_n
+							println("n")
+							new_vars = w_n;
+							merit_function_value = X_n
+							break;
+						elseif X_l < goal
+							println("l")
+							new_vars = w_l;
+							merit_function_value = X_l;
+							break;
+						end
+					
+						if this.alpha < settings.min_alpha
+							merit_function_value = previous_merit_function_value;
+							break
+						end
+					
+						this.alpha = this.alpha*settings.beta4;
+					
 					end
-					
-					
-					w_n = this.compute_alternative_point(w_l,local_approx);
-					X_n = local_approx.update_approximation(nlp,w_n,settings);
-					state_w_n = deepcopy(local_approx.state);
-					if ~ this.is_valid_step(w_n, state_w_n, state_vars, settings) 
-						X_n = Inf
-					end
-					
-					 #minimum([X_l,X_n]); #minimum(X_l,X_n)
-					
-					goal = previous_merit_function_value - this.alpha * settings.beta3 * expected_gain;
-					if X_n < goal && X_l < X_n
-						new_vars = w_n;
-						merit_function_value = X_n
-						break;
-					elseif X_l < goal
-						new_vars = w_l;
-						merit_function_value = X_l;
-						break;
-					end
-					
-					if this.alpha < settings.min_alpha
-						merit_function_value = previous_merit_function_value;
-						break
-					end
-					
-					this.alpha = this.alpha*settings.beta4;
-					
-				end
-								
+
+					if i == max_it
+						this.alpha = 0.0;
+					end	
+				end 
+
+
 				local_approx.update_approximation(nlp,vars,settings); # restore local approximation
 				return merit_function_value, new_vars, i
 			catch e

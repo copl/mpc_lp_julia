@@ -32,7 +32,7 @@ function ip_algorithm(nlp::class_non_linear_program,	settings::class_settings, v
 		number_of_merit_function_evaluations = 0;
 		direction.alpha = 0.0;
 		
-		omega = 1e-8
+		delta = 1e-4
 
 		for itr = 0:settings.max_iter
 			try	
@@ -66,78 +66,88 @@ function ip_algorithm(nlp::class_non_linear_program,	settings::class_settings, v
 				end
 				
 
-				direction.update_factorization(local_approx,nlp,variables,settings)
-				sigma = direction.factored_K_bar.calc_min_mod()*3 #+ 100*local_approx.state.mu/variables.tau
+				#direction.update_factorization(local_approx,nlp,variables,settings)
+				#sigma = direction.factored_K_bar.calc_min_mod()
 
-				nlp_convex = nlp.convexify(sigma, variables.x_scaled()) ##################################
-				local_approx.update_approximation(nlp_convex, variables, settings);
+				
 				#println("Omega = ",omega)				
-
-				if direction.update_factorization(local_approx,nlp,variables,settings) || ~settings.non_convex_mode
-					#println("is inertia correct: ",direction.factored_K_bar.is_convex)
-
-					direction.compute_p_vector(local_approx,variables);				
 				
-					# compute predictor
-					predictor_merit_function_value = orginal_merit_function_value;
-					number_of_merit_function_evaluations_predictor = 0;
+				for j = 1:100
+					nlp_convex = nlp.convexify(delta, variables.x_scaled()) ##################################
+					local_approx.update_approximation(nlp_convex, variables, settings);
+					
+					if direction.update_factorization(local_approx,nlp_convex,variables,settings)
+						#println("is inertia correct: ",direction.factored_K_bar.is_convex)
 
-					orginal_mu = local_approx.state.mu
-					try
-						local_approx.gamma = 0.0;
-						direction.compute_direction(local_approx, variables);
-						direction.compute_maximum_step_size(variables, settings)
-						#@assert(direction.alpha > settings.min_alpha)
-						predictor_merit_function_value, temp, number_of_merit_function_evaluations_predictor = direction.step_size_line_search(variables, nlp_convex, local_approx, settings);
+						direction.compute_p_vector(local_approx,variables);				
+				
+						# compute predictor
+						predictor_merit_function_value = orginal_merit_function_value;
+						number_of_merit_function_evaluations_predictor = 0;
+
+						orginal_mu = local_approx.state.mu
+						try
+							local_approx.gamma = 0.0;
+							direction.compute_direction(local_approx, variables);
+							direction.compute_maximum_step_size(variables, settings)
+							#@assert(direction.alpha > settings.min_alpha)
+							predictor_merit_function_value, temp, number_of_merit_function_evaluations_predictor = direction.step_size_line_search(variables, nlp_convex, local_approx, settings);
 						
 						
-					catch e
-						#println(full(direction.K_bar))
-						#println("x-scaled",variables.x_scaled())	
-						#println("x/s",(variables.s)./variables.x)
-						#println("x",(variables.x))
-						#println("dx",direction.dx)					
-						println("ERROR predictor")
-						println(e)
-						println("===============")
-						#throw(e)
-					end
+						catch e
+							#println(full(direction.K_bar))
+							#println("x-scaled",variables.x_scaled())	
+							#println("x/s",(variables.s)./variables.x)
+							#println("x",(variables.x))
+							#println("dx",direction.dx)					
+							println("ERROR predictor")
+							println(e)
+							println("===============")
+							#throw(e)
+						end
 
-					# compute corrector
-					number_of_merit_function_evaluations_corrector = 0;
-					step_alpha = NaN;
-					try
-						#new_mu = local_approx.state.mu
-						#v = new_mu/orginal_mu
-						v = predictor_merit_function_value/orginal_merit_function_value;
+						# compute corrector
+						number_of_merit_function_evaluations_corrector = 0;
+						step_alpha = NaN;
+						try
+							#new_mu = local_approx.state.mu
+							#v = new_mu/orginal_mu
+							v = predictor_merit_function_value/orginal_merit_function_value;
 						
-						local_approx.gamma = 0.5 #min(1.0,v)*min(v, settings.beta6); # Mehrotra heuristic, see pg 257	
+							local_approx.gamma = min(v,1.0)*min(v, settings.beta6); # Mehrotra heuristic, see pg 257	
 
-						direction.compute_direction(local_approx, variables);
-						direction.compute_maximum_step_size(variables, settings)
-						step_alpha = direction.alpha
-						@assert(direction.alpha > 10*settings.min_alpha)
+							direction.compute_direction(local_approx, variables);
+							direction.compute_maximum_step_size(variables, settings)
+							#step_alpha = direction.alpha
+							#@assert(direction.alpha > 10*settings.min_alpha)
 										
-						#variables.take_step(direction)
-						#direction.alpha = 0.9*direction.alpha						
-						merit_function_value, variables, number_of_merit_function_evaluations_corrector = direction.step_size_line_search(variables, nlp_convex, local_approx, settings);
-						#variables.take_step(direction);
-						@assert(direction.alpha > settings.min_alpha)				
-					catch e
-						println("ERROR corrector")
-						println("step Alpha = ", step_alpha)							
-						println("Alpha = ", direction.alpha)						
-						println("Gamma = ", local_approx.gamma)
-						throw(e)
+							#variables.take_step(direction)
+							#direction.alpha = 0.9*direction.alpha						
+							merit_function_value, variables, number_of_merit_function_evaluations_corrector = direction.step_size_line_search(variables, nlp_convex, local_approx, settings);
+							#variables.take_step(direction);
+							#@assert(direction.alpha > settings.min_alpha)				
+						catch e
+							println("ERROR corrector")
+							println("step Alpha = ", step_alpha)							
+							println("Alpha = ", direction.alpha)						
+							println("Gamma = ", local_approx.gamma)
+							throw(e)
+						end
+				
+				
+					 
+						# step to next point
+						number_of_merit_function_evaluations = number_of_merit_function_evaluations_predictor + number_of_merit_function_evaluations_corrector
+
+						delta = delta/(1.3) #max(delta/((direction.alpha/0.3)),1e-10)
+						break
+					else
+						delta = delta*11.0;
 					end
-				
-				
-				
-					# step to next point
-					number_of_merit_function_evaluations = number_of_merit_function_evaluations_predictor + number_of_merit_function_evaluations_corrector
 				end
-				#omega = max(omega/((direction.alpha/0.3)^2),1e-10)
-				@assert(omega < 1e10)
+
+				println("delta =", delta)
+				@assert(delta < 1e10)
 			catch e
 				println("ERROR iteration ", itr + 1)
 				#println(variables.x_scaled(),variables.y_scaled())
@@ -158,7 +168,10 @@ function evaluate_mu(nlp,variables,direction)
 end
 
 function print_status(direction, state, itr, variables, number_of_merit_function_evaluations, gamma) 
-	@printf("%s %2.1e %2.1e %2.1e %2.1e %2.1e %2.1e %2.1e %2.1e %i\n", rpad(string(itr),3), direction.alpha, gamma, variables.tau, variables.kappa, state.mu, state.r_gap_norm, state.r_primal_norm, state.r_dual_norm, number_of_merit_function_evaluations)
+	scale = variables.tau + variables.kappa
+	@printf("%s %2.1e %2.1e %2.1e %2.1e %2.1e %2.1e %2.1e %2.1e %i\n", rpad(string(itr),3), direction.alpha, gamma, variables.tau, variables.kappa, state.mu/scale, state.r_gap_norm/scale, state.r_primal_norm/scale, state.r_dual_norm/scale, number_of_merit_function_evaluations)
+
+	println("merit = ", (state.mu/sqrt(length(variables.x) + length(variables.y) + 1) + state.r_norm)/scale)
 end
 
 function evaluate_solution_status(state::class_state, settings::class_settings)

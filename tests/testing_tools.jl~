@@ -26,7 +26,7 @@ end
 function standard_settings()
 	settings = class_settings();
 	
-	settings.max_iter = 500;  # Total number of iterarions
+	settings.max_iter = 150;  # Total number of iterarions
 	settings.min_alpha = 1e-3;
 	
 	settings.kkt_feasible = 1e-6
@@ -37,8 +37,8 @@ function standard_settings()
 	settings.primal_infeas_tol = 1e-6
 	settings.dual_infeas_tol = 1e-6
 	
-	settings.beta1 = 10.0^(-4)
-	settings.beta2 = 10.0^(-8)
+	settings.beta1 = 10.0^(-4) #10.0^(-4)
+	settings.beta2 = 10.0^(-6) #10.0^(-8)
 	settings.beta3 = 10.0^(-4)
 	settings.beta4 = 0.9
 	settings.beta5 = 0.999
